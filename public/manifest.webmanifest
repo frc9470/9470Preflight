@@ -1,0 +1,24 @@
+{
+  "name": "FRC 9470 Pit Preflight",
+  "short_name": "9470 Pit",
+  "description": "Pit-side match queue and preflight checklist app for Team 9470.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#07121f",
+  "theme_color": "#d12630",
+  "icons": [
+    {
+      "src": "/9470-logo.png",
+      "sizes": "1080x1214",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

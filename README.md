@@ -1,0 +1,54 @@
+# FRC 9470 Pit Management PWA
+
+Mobile-first Next.js PWA for Team 9470 pit operations.
+
+## Features
+
+- Upcoming match feed with Nexus primary integration and automatic TBA fallback
+- Mock match feed mode for pre-event testing without live Nexus/TBA schedule data
+- Queue timing, alliance context, and expected match timing
+- Guided 38-step preflight checklist with hard gating and required override reason for failed checks
+- Current-event checklist run history
+- Offline snapshot support for match feed and offline checklist continuation
+- Local browser notifications for queue alerts
+
+## Quick start
+
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+## Testing before event data exists
+
+1. Open `Settings`
+2. Set `Data Mode` to `Mock (generated test schedule)`
+3. Save settings
+4. Return to dashboard and run full preflight flows from generated matches
+
+## Required environment variables
+
+- `NEXUS_API_KEY`
+- `TBA_API_KEY`
+
+Optional:
+
+- `NEXUS_BASE_URL`
+- `TBA_BASE_URL`
+
+## API routes
+
+- `GET /api/matches?team=9470&event=2026xxxx&leadMinutes=20`
+- `GET /api/integrations/status`
+
+## Scripts
+
+- `npm run dev`
+- `npm run build`
+- `npm run start`
+- `npm run lint`
+- `npm run typecheck`
+- `npm run test`
