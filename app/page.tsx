@@ -53,9 +53,7 @@ export default function DashboardPage(): React.JSX.Element {
   const [fallback, setFallback] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatus | null>(null);
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
-    typeof Notification === "undefined" ? "unsupported" : Notification.permission
-  );
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported" | null>(null);
   const announced = useRef<Set<string>>(new Set());
 
   const refresh = useCallback(async () => {
