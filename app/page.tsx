@@ -4,14 +4,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 import { MatchCardView } from "@/app/components/MatchCard";
-import { getMatchesSnapshot, getSettings, saveMatchesSnapshot } from "@/src/storage/localDb";
-import type { AppSettings, MatchCard, MatchesPayload } from "@/src/types/domain";
+import { getMatchesSnapshot, getSettings, listRunsForEvent, saveMatchesSnapshot } from "@/src/storage/localDb";
+import type { AppSettings, MatchCard, MatchesPayload, PreflightRunState } from "@/src/types/domain";
 
 type IntegrationStatus = {
   nexus: { configured: boolean; baseUrl: string };
   tba: { configured: boolean; baseUrl: string };
   fallbackEnabled: boolean;
 };
+
+type RunStateByMatch = Record<string, PreflightRunState | undefined>;
 
 function queueCountdown(iso: string | null): string {
   if (!iso) {
@@ -53,7 +55,10 @@ export default function DashboardPage(): React.JSX.Element {
   const [fallback, setFallback] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatus | null>(null);
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported" | null>(null);
+  const [runStateByMatch, setRunStateByMatch] = useState<RunStateByMatch>({});
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
+    typeof Notification === "undefined" ? "unsupported" : Notification.permission
+  );
   const announced = useRef<Set<string>>(new Set());
 
   const refresh = useCallback(async () => {
@@ -65,9 +70,20 @@ export default function DashboardPage(): React.JSX.Element {
 
     if (!current.eventKey) {
       setMatches([]);
+      setRunStateByMatch({});
       setLoading(false);
       return;
     }
+
+    const runStatePromise = listRunsForEvent(current.eventKey)
+      .then((runs) => {
+        const map: RunStateByMatch = {};
+        for (const run of runs) {
+          map[run.matchKey] = run.state;
+        }
+        return map;
+      })
+      .catch(() => ({}));
 
     try {
       const modeParam = current.dataMode === "mock" ? "&mode=mock" : "";
@@ -100,6 +116,7 @@ export default function DashboardPage(): React.JSX.Element {
         setError(`Unable to load match data: ${(fetchError as Error).message}`);
       }
     } finally {
+      setRunStateByMatch(await runStatePromise);
       setLoading(false);
     }
   }, []);
@@ -233,7 +250,9 @@ export default function DashboardPage(): React.JSX.Element {
         {loading ? (
           <div className="card">Loading matches...</div>
         ) : nowQueueingMatches.length ? (
-          nowQueueingMatches.map((match) => <MatchCardView key={`queueing-${match.matchKey}`} match={match} />)
+          nowQueueingMatches.map((match) => (
+            <MatchCardView key={`queueing-${match.matchKey}`} match={match} runState={runStateByMatch[match.matchKey]} />
+          ))
         ) : (
           <div className="card">No matches currently queueing.</div>
         )}
@@ -245,7 +264,7 @@ export default function DashboardPage(): React.JSX.Element {
         {loading ? <div className="card">Loading matches...</div> : null}
         {!loading && !upcomingMatches.length ? <div className="card">No additional upcoming matches right now.</div> : null}
         {upcomingMatches.map((match) => (
-          <MatchCardView key={match.matchKey} match={match} />
+          <MatchCardView key={match.matchKey} match={match} runState={runStateByMatch[match.matchKey]} />
         ))}
       </section>
     </div>

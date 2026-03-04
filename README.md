@@ -7,8 +7,12 @@ Mobile-first Next.js PWA for Team 9470 pit operations.
 - Upcoming match feed with Nexus primary integration and automatic TBA fallback
 - Mock match feed mode for pre-event testing without live Nexus/TBA schedule data
 - Queue timing, alliance context, and expected match timing
-- Guided 38-step preflight checklist with hard gating and required override reason for failed checks
+- Guided 38-step preflight checklist with subsystem categories, purpose-built numeric controls, and pass/delay workflow
+- Delayed action queue with resolve-and-return flow for delegated tasks
+- Undo last action in preflight for accidental tap recovery
 - Current-event checklist run history
+- History summary metrics + run-state filters + one-tap checklist reopen
+- Match cards include checklist state (not started / in progress / blocked / ready)
 - Offline snapshot support for match feed and offline checklist continuation
 - Local browser notifications for queue alerts
 

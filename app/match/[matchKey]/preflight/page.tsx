@@ -19,6 +19,12 @@ import type {
   StepResponse
 } from "@/src/types/domain";
 
+type UndoState = {
+  run: PreflightRun;
+  stepIndex: number;
+  label: string;
+};
+
 function getResponse(run: PreflightRun | null, stepId: string): StepResponse | undefined {
   return run?.responses.find((response) => response.stepId === stepId);
 }
@@ -162,6 +168,10 @@ function normalizeResponse(step: ChecklistStep, response: StepResponse): StepRes
   }
 
   return withPassFlag;
+}
+
+function cloneRun(run: PreflightRun): PreflightRun {
+  return JSON.parse(JSON.stringify(run)) as PreflightRun;
 }
 
 function formatCardAge(createdAtIso: string): string {
@@ -323,6 +333,7 @@ export default function PreflightPage(): React.JSX.Element {
   const [run, setRun] = useState<PreflightRun | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
+  const [undoState, setUndoState] = useState<UndoState | null>(null);
 
   useEffect(() => {
     const load = async (): Promise<void> => {
@@ -331,6 +342,7 @@ export default function PreflightPage(): React.JSX.Element {
 
       if (!appSettings.eventKey) {
         setRun(null);
+        setUndoState(null);
         return;
       }
 
@@ -341,6 +353,7 @@ export default function PreflightPage(): React.JSX.Element {
           await saveRun(migrated.run);
         }
         setRun(migrated.run);
+        setUndoState(null);
         setStepIndex(firstIncompleteIndex(migrated.run));
         return;
       }
@@ -356,6 +369,7 @@ export default function PreflightPage(): React.JSX.Element {
       };
       await saveRun(fresh);
       setRun(fresh);
+      setUndoState(null);
       setStepIndex(0);
     };
 
@@ -435,12 +449,19 @@ export default function PreflightPage(): React.JSX.Element {
       return;
     }
 
+    const undoSnapshot = cloneRun(run);
+    const undoStepIndex = stepIndex;
     const prev = getResponse(run, step.id);
     const openCard = openActionCards.find((card) => card.stepId === step.id);
     const draft = buildDecisionDraft(step, prev, shouldPass, openCard);
 
     await commitStepResponse(step, draft, run.actionCards);
     autoAdvance();
+    setUndoState({
+      run: undoSnapshot,
+      stepIndex: undoStepIndex,
+      label: shouldPass ? `Pass ${step.id}` : `Update ${step.id}`
+    });
   };
 
   const setNumberLike = async (value: number): Promise<void> => {
@@ -474,9 +495,17 @@ export default function PreflightPage(): React.JSX.Element {
       return;
     }
 
+    const undoSnapshot = cloneRun(run);
+    const undoStepIndex = stepIndex;
+
     const existingCard = openActionCards.find((card) => card.stepId === step.id);
     if (existingCard) {
       autoAdvance();
+      setUndoState({
+        run: undoSnapshot,
+        stepIndex: undoStepIndex,
+        label: `Delay ${step.id}`
+      });
       return;
     }
 
@@ -514,12 +543,20 @@ export default function PreflightPage(): React.JSX.Element {
 
     await commitStepResponse(step, draft, [...closedPriorCards, newCard], "Step delayed.");
     autoAdvance();
+    setUndoState({
+      run: undoSnapshot,
+      stepIndex: undoStepIndex,
+      label: `Delay ${step.id}`
+    });
   };
 
   const markActionCardFixed = async (cardId: string): Promise<void> => {
     if (!run || isLocked) {
       return;
     }
+
+    const undoSnapshot = cloneRun(run);
+    const undoStepIndex = stepIndex;
 
     const card = run.actionCards.find((item) => item.id === cardId);
     if (!card || card.status !== "OPEN") {
@@ -555,6 +592,11 @@ export default function PreflightPage(): React.JSX.Element {
 
     await persistRun(nextRun);
     setMessage(`Card passed for ${stepDef.id}.`);
+    setUndoState({
+      run: undoSnapshot,
+      stepIndex: undoStepIndex,
+      label: `Mark pass ${stepDef.id}`
+    });
   };
 
   const allComplete = PRE_FLIGHT_9470_STEPS.every((item) => isResponseComplete(getResponse(run, item.id)));
@@ -565,6 +607,8 @@ export default function PreflightPage(): React.JSX.Element {
       return;
     }
 
+    const undoSnapshot = cloneRun(run);
+    const undoStepIndex = stepIndex;
     const finalized: PreflightRun = {
       ...run,
       state: "READY",
@@ -573,6 +617,21 @@ export default function PreflightPage(): React.JSX.Element {
 
     await persistRun(finalized);
     setMessage("Match marked READY.");
+    setUndoState({
+      run: undoSnapshot,
+      stepIndex: undoStepIndex,
+      label: "Mark match ready"
+    });
+  };
+
+  const undoLastAction = async (): Promise<void> => {
+    if (!undoState) {
+      return;
+    }
+    await persistRun(undoState.run);
+    setStepIndex(undoState.stepIndex);
+    setMessage(`Undid: ${undoState.label}.`);
+    setUndoState(null);
   };
 
   if (!settings?.eventKey) {
@@ -742,6 +801,11 @@ export default function PreflightPage(): React.JSX.Element {
           >
             Previous Step
           </button>
+          {undoState ? (
+            <button className="button secondary" type="button" onClick={() => void undoLastAction()}>
+              Undo Last Action
+            </button>
+          ) : null}
         </div>
       </section>
 
