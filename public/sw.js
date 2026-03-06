@@ -1,5 +1,15 @@
-const CACHE_NAME = "frc9470-pwa-v1";
-const APP_SHELL = ["/", "/settings", "/history", "/manifest.webmanifest", "/icon.svg"];
+const CACHE_NAME = "frc9470-pwa-v2";
+const APP_SHELL = [
+  "/",
+  "/settings",
+  "/history",
+  "/manifest.webmanifest",
+  "/icon.svg",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/apple-touch-icon.png",
+  "/9470-logo.png"
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

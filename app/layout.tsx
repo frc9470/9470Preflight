@@ -11,8 +11,19 @@ export const metadata: Metadata = {
   description: "Mobile pit management and match preflight workflow for Team 9470.",
   applicationName: "9470 Pit",
   manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "9470 Pit"
+  },
   icons: {
-    icon: "/icon.svg"
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" }
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    shortcut: ["/icon-192.png"]
   }
 };
 

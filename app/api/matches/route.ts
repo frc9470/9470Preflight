@@ -7,6 +7,8 @@ import { sortMatches } from "@/src/integrations/normalize";
 import type { MatchCard } from "@/src/types/domain";
 
 type IntegrationSource = "NEXUS" | "TBA" | "MOCK";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function parsePositiveInt(value: string | null): number | null {
   if (!value) {
@@ -29,6 +31,12 @@ function stamp(matches: MatchCard[], source: IntegrationSource, isFallback: bool
   }));
 }
 
+function jsonNoStore(body: unknown, init?: ResponseInit): NextResponse {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "no-store, max-age=0");
+  return response;
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const teamNumber = parsePositiveInt(request.nextUrl.searchParams.get("team"));
   const eventKey = request.nextUrl.searchParams.get("event")?.trim() ?? "";
@@ -37,7 +45,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const useMock = mode === "mock" || request.nextUrl.searchParams.get("mock") === "1";
 
   if (!teamNumber || !eventKey) {
-    return NextResponse.json(
+    return jsonNoStore(
       {
         error: "Missing or invalid query parameters. Required: team, event. Optional: leadMinutes."
       },
@@ -49,7 +57,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   if (useMock) {
     const mockMatches = buildMockMatches(opts);
-    return NextResponse.json({
+    return jsonNoStore({
       matches: stamp(mockMatches, "MOCK", false),
       source: "MOCK",
       isFallback: false,
@@ -59,7 +67,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   try {
     const nexusMatches = await fetchNexusMatches(opts);
-    return NextResponse.json({
+    return jsonNoStore({
       matches: stamp(sortMatches(nexusMatches), "NEXUS", false),
       source: "NEXUS",
       isFallback: false,
@@ -70,7 +78,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       nexusError instanceof NexusUnavailableError || nexusError instanceof NexusInvalidPayloadError;
 
     if (!isNexusKnownFailure) {
-      return NextResponse.json(
+      return jsonNoStore(
         {
           error: "Unexpected Nexus integration error",
           details: (nexusError as Error).message
@@ -81,7 +89,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     try {
       const tbaMatches = await fetchTbaMatches(opts);
-      return NextResponse.json({
+      return jsonNoStore({
         matches: stamp(sortMatches(tbaMatches), "TBA", true),
         source: "TBA",
         isFallback: true,
@@ -90,7 +98,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
     } catch (tbaError) {
       const isTbaKnownFailure = tbaError instanceof TbaUnavailableError;
-      return NextResponse.json(
+      return jsonNoStore(
         {
           error: "Both integrations failed",
           nexusError: (nexusError as Error).message,
