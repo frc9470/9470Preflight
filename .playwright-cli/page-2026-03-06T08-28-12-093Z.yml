@@ -1,0 +1,61 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - link "Team 9470 logo FRC 9470 Pit" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - img "Team 9470 logo" [ref=e5]
+      - generic [ref=e6]:
+        - text: FRC
+        - strong [ref=e7]: "9470"
+        - text: Pit
+    - generic [ref=e8]:
+      - link "Dashboard" [ref=e9] [cursor=pointer]:
+        - /url: /
+      - link "History" [ref=e10] [cursor=pointer]:
+        - /url: /history
+      - link "Settings" [ref=e11] [cursor=pointer]:
+        - /url: /settings
+  - main [ref=e12]:
+    - generic [ref=e255]:
+      - generic [ref=e256]:
+        - generic [ref=e257]:
+          - generic [ref=e258]:
+            - heading "Preflight" [level=1] [ref=e259]
+            - generic [ref=e260]: practice
+            - generic [ref=e261]: practice_qm1
+          - generic [ref=e262]: BLOCKED
+        - generic [ref=e263]:
+          - generic [ref=e264]:
+            - generic [ref=e265]: 5%
+            - generic [ref=e266]: Step 3 / 38
+            - generic [ref=e267]: Done 1
+            - generic [ref=e268]: Delayed 1
+            - generic [ref=e269]: Blocking 0
+          - progressbar [ref=e270]
+      - generic [ref=e271]:
+        - generic [ref=e273]: Step 3 of 38
+        - generic [ref=e274]: Hopper
+        - heading "Confirm hopper divider zip ties are secure" [level=2] [ref=e289]
+        - generic [ref=e276]:
+          - button "Pass" [ref=e277] [cursor=pointer]
+          - button "Delay" [active] [ref=e278] [cursor=pointer]
+        - generic [ref=e279]:
+          - button "Previous Step" [ref=e280] [cursor=pointer]
+          - button "Undo Last Action" [ref=e288] [cursor=pointer]
+      - generic [ref=e290]:
+        - generic [ref=e291]:
+          - heading "Delayed Queue" [level=3] [ref=e292]
+          - generic [ref=e293]: 1 OPEN
+        - article [ref=e295]:
+          - generic [ref=e296]:
+            - generic [ref=e297]: Inspect hopper pulleys for cracks or damage
+            - generic [ref=e298]: just now
+          - generic [ref=e299]: "Delayed: Inspect hopper pulleys for cracks or damage"
+          - button "Mark Pass" [ref=e301] [cursor=pointer]
+      - generic [ref=e281]:
+        - heading "Finalize" [level=2] [ref=e282]
+        - generic [ref=e283]: You can mark ready only when every step passes and delayed cards are resolved.
+        - generic [ref=e302]: Resolve 1 delayed card(s) before finalizing.
+        - generic [ref=e284]: 36 checklist step(s) still unanswered.
+        - button "Mark Match Ready" [disabled] [ref=e285]
+        - generic [ref=e303]: Step delayed.
+  - alert [ref=e45]

@@ -1,0 +1,42 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - link "Team 9470 logo FRC 9470 Pit" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - img "Team 9470 logo" [ref=e5]
+      - generic [ref=e6]:
+        - text: FRC
+        - strong [ref=e7]: "9470"
+        - text: Pit
+    - generic [ref=e8]:
+      - link "Dashboard" [ref=e9] [cursor=pointer]:
+        - /url: /
+      - link "History" [ref=e10] [cursor=pointer]:
+        - /url: /history
+      - link "Settings" [ref=e11] [cursor=pointer]:
+        - /url: /settings
+  - main [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - generic [ref=e16]:
+            - generic [ref=e17]: Pit Board
+            - generic [ref=e19]: Not configured
+            - generic [ref=e20]:
+              - generic [ref=e21]: Team 9470
+              - generic [ref=e22]: Queue lead 20m
+              - generic [ref=e23]: Not synced yet
+          - generic [ref=e24]:
+            - button "Enable alerts" [ref=e25] [cursor=pointer]
+            - button "Refresh" [ref=e26] [cursor=pointer]
+            - link "Settings" [ref=e27] [cursor=pointer]:
+              - /url: /settings
+        - generic [ref=e28]:
+          - text: Configure event key in
+          - link "Settings" [ref=e29] [cursor=pointer]:
+            - /url: /settings
+          - text: to load upcoming matches.
+      - generic [ref=e30]: Loading matches...
+      - generic [ref=e31]:
+        - heading "Next Up" [level=2] [ref=e33]
+        - generic [ref=e34]: Loading matches...
+  - alert [ref=e35]

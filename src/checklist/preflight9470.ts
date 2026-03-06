@@ -72,7 +72,7 @@ export const PRE_FLIGHT_9470_STEPS: ChecklistStep[] = [
     prompt: "Cameras detected on robot (count)",
     kind: "counter",
     required: true,
-    min: 2
+    min: 3
   },
   {
     id: "cold-7",

@@ -1,0 +1,47 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - link "Team 9470 logo FRC 9470 Pit" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - img "Team 9470 logo" [ref=e5]
+      - generic [ref=e6]:
+        - text: FRC
+        - strong [ref=e7]: "9470"
+        - text: Pit
+    - generic [ref=e8]:
+      - link "Dashboard" [ref=e9] [cursor=pointer]:
+        - /url: /
+      - link "History" [ref=e10] [cursor=pointer]:
+        - /url: /history
+      - link "Settings" [ref=e11] [cursor=pointer]:
+        - /url: /settings
+  - main [ref=e12]:
+    - generic [ref=e255]:
+      - generic [ref=e256]:
+        - generic [ref=e257]:
+          - generic [ref=e258]:
+            - heading "Preflight" [level=1] [ref=e259]
+            - generic [ref=e260]: practice
+            - generic [ref=e261]: practice_qm1
+          - generic [ref=e262]: IN PROGRESS
+        - generic [ref=e263]:
+          - generic [ref=e264]:
+            - generic [ref=e265]: 0%
+            - generic [ref=e266]: Step 1 / 38
+            - generic [ref=e267]: Done 0
+            - generic [ref=e268]: Delayed 0
+            - generic [ref=e269]: Blocking 0
+          - progressbar [ref=e270]
+      - generic [ref=e271]:
+        - generic [ref=e273]: Step 1 of 38
+        - generic [ref=e274]: Hopper
+        - heading "Verify hopper screws are tight and Loctite is applied" [level=2] [ref=e275]
+        - generic [ref=e276]:
+          - button "Pass" [ref=e277] [cursor=pointer]
+          - button "Delay" [ref=e278] [cursor=pointer]
+        - button "Previous Step" [disabled] [ref=e280]
+      - generic [ref=e281]:
+        - heading "Finalize" [level=2] [ref=e282]
+        - generic [ref=e283]: You can mark ready only when every step passes and delayed cards are resolved.
+        - generic [ref=e284]: 38 checklist step(s) still unanswered.
+        - button "Mark Match Ready" [disabled] [ref=e285]
+  - alert [ref=e45]

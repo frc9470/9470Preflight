@@ -4,8 +4,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 import { MatchCardView } from "@/app/components/MatchCard";
+import { getPitStage, isNowQueueing, queueCountdown } from "@/src/matches/pitFlow";
 import { getMatchesSnapshot, getSettings, listRunsForEvent, saveMatchesSnapshot } from "@/src/storage/localDb";
-import type { AppSettings, MatchCard, MatchesPayload, PreflightRunState } from "@/src/types/domain";
+import {
+  buildRunSummaryMap,
+  emptyRunSummary,
+  pickNextFocusMatch,
+  summaryProgressLabel,
+  summaryStatusLabel,
+  summaryStatusTone,
+  type MatchRunSummary
+} from "@/src/runs/summary";
+import type { AppSettings, MatchCard, MatchesPayload } from "@/src/types/domain";
 
 type IntegrationStatus = {
   nexus: { configured: boolean; baseUrl: string };
@@ -13,36 +23,118 @@ type IntegrationStatus = {
   fallbackEnabled: boolean;
 };
 
-type RunStateByMatch = Record<string, PreflightRunState | undefined>;
+type RunSummaryByMatch = Record<string, MatchRunSummary>;
+type NotificationState = NotificationPermission | "unsupported" | null;
 
-function queueCountdown(iso: string | null): string {
+type FocusBoardCopy = {
+  eyebrow: string;
+  title: string;
+  guidance: string;
+  tone: "upcoming" | "queue" | "field";
+};
+
+function formatTime(iso: string | null): string {
   if (!iso) {
-    return "Queue time unavailable";
+    return "TBD";
   }
-  const ms = new Date(iso).getTime() - Date.now();
-  const minutes = Math.round(ms / 60000);
-  if (minutes > 0) {
-    return `${minutes} min to queue`;
-  }
-  if (minutes === 0) {
-    return "Queue now";
-  }
-  return `${Math.abs(minutes)} min past queue`;
+  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-function isQueueSoon(match: MatchCard): boolean {
-  if (!match.queueTimeIso) {
-    return false;
+function statusClass(status: MatchCard["status"]): "upcoming" | "queue" | "deck" | "field" | "done" {
+  if (status === "QUEUE") {
+    return "queue";
   }
-  const delta = new Date(match.queueTimeIso).getTime() - Date.now();
-  return delta <= 15 * 60 * 1000 && delta >= -5 * 60 * 1000;
+  if (status === "ON_DECK") {
+    return "deck";
+  }
+  if (status === "ON_FIELD_SOON") {
+    return "field";
+  }
+  if (status === "COMPLETED") {
+    return "done";
+  }
+  return "upcoming";
 }
 
-function isNowQueueing(match: MatchCard): boolean {
-  if (match.status === "QUEUE" || match.status === "ON_DECK" || match.status === "ON_FIELD_SOON") {
-    return true;
+function matchLabel(match: MatchCard): string {
+  return `${match.compLevel.toUpperCase()} ${match.matchNumber}`;
+}
+
+function checklistActionText(match: MatchCard, summary: MatchRunSummary): string {
+  if (!summary.hasRun) {
+    return getPitStage(match) === "PREP_NEXT" || getPitStage(match) === "LATER" ? "Start cold checks" : "Start preflight";
   }
-  return isQueueSoon(match);
+  if (summary.runState === "READY") {
+    return "Review ready match";
+  }
+  if (summary.openActionCards > 0) {
+    return "Resume and close delays";
+  }
+  return "Resume checklist";
+}
+
+function buildFocusBoardCopy(match: MatchCard, summary: MatchRunSummary): FocusBoardCopy {
+  const label = matchLabel(match);
+  const stage = getPitStage(match);
+  const delayedText = summary.openActionCards === 1 ? "1 delayed check" : `${summary.openActionCards} delayed checks`;
+
+  if (summary.runState === "READY") {
+    if (stage === "QUEUE_NOW" || stage === "QUEUE_SOON") {
+      return {
+        eyebrow: "Queue window",
+        title: `${label} is ready`,
+        guidance: "Checklist is clear. Keep the robot on this match and move toward queue.",
+        tone: "field"
+      };
+    }
+    return {
+      eyebrow: "Ready",
+      title: `${label} is already ready`,
+      guidance: "Nothing is waiting in the checklist. Review only if the robot changed after the last run.",
+      tone: "field"
+    };
+  }
+
+  if (summary.openActionCards > 0) {
+    return {
+      eyebrow: stage === "QUEUE_NOW" ? "Do now" : "Delegated work",
+      title: `${label} is waiting on ${delayedText}`,
+      guidance: "Keep the checklist moving, but this match cannot be marked ready until delayed work is marked pass.",
+      tone: "queue"
+    };
+  }
+
+  if (!summary.hasRun) {
+    if (stage === "QUEUE_NOW") {
+      return {
+        eyebrow: "Do now",
+        title: `Start ${label} preflight now`,
+        guidance: "Queue is already open. Work this match first instead of looking ahead.",
+        tone: "queue"
+      };
+    }
+    if (stage === "QUEUE_SOON") {
+      return {
+        eyebrow: "Queue soon",
+        title: `Finish ${label} before queue`,
+        guidance: "Use the remaining minutes for cold checks so queue is only hot checks and fast fixes.",
+        tone: "queue"
+      };
+    }
+    return {
+      eyebrow: "Prep next",
+      title: `Prep ${label} next`,
+      guidance: "This is the next match that still needs work. Start cold checks now while the pit is quiet.",
+      tone: "upcoming"
+    };
+  }
+
+  return {
+    eyebrow: stage === "QUEUE_NOW" ? "Do now" : "In progress",
+    title: `Continue ${label}`,
+    guidance: `${summary.passedCount}/${summary.totalSteps} checks are already passed. Keep advancing and delay anything someone else is fixing.`,
+    tone: stage === "QUEUE_NOW" || stage === "QUEUE_SOON" ? "queue" : "upcoming"
+  };
 }
 
 export default function DashboardPage(): React.JSX.Element {
@@ -55,10 +147,8 @@ export default function DashboardPage(): React.JSX.Element {
   const [fallback, setFallback] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatus | null>(null);
-  const [runStateByMatch, setRunStateByMatch] = useState<RunStateByMatch>({});
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
-    typeof Notification === "undefined" ? "unsupported" : Notification.permission
-  );
+  const [runSummaryByMatch, setRunSummaryByMatch] = useState<RunSummaryByMatch>({});
+  const [notificationPermission, setNotificationPermission] = useState<NotificationState>(null);
   const announced = useRef<Set<string>>(new Set());
 
   const refresh = useCallback(async () => {
@@ -70,19 +160,13 @@ export default function DashboardPage(): React.JSX.Element {
 
     if (!current.eventKey) {
       setMatches([]);
-      setRunStateByMatch({});
+      setRunSummaryByMatch({});
       setLoading(false);
       return;
     }
 
     const runStatePromise = listRunsForEvent(current.eventKey)
-      .then((runs) => {
-        const map: RunStateByMatch = {};
-        for (const run of runs) {
-          map[run.matchKey] = run.state;
-        }
-        return map;
-      })
+      .then((runs) => buildRunSummaryMap(runs))
       .catch(() => ({}));
 
     try {
@@ -116,7 +200,7 @@ export default function DashboardPage(): React.JSX.Element {
         setError(`Unable to load match data: ${(fetchError as Error).message}`);
       }
     } finally {
-      setRunStateByMatch(await runStatePromise);
+      setRunSummaryByMatch(await runStatePromise);
       setLoading(false);
     }
   }, []);
@@ -130,6 +214,14 @@ export default function DashboardPage(): React.JSX.Element {
 
     return () => clearInterval(statusInterval);
   }, [refresh]);
+
+  useEffect(() => {
+    if (typeof Notification === "undefined") {
+      setNotificationPermission("unsupported");
+      return;
+    }
+    setNotificationPermission(Notification.permission);
+  }, []);
 
   useEffect(() => {
     fetch("/api/integrations/status", { cache: "no-store" })
@@ -157,7 +249,7 @@ export default function DashboardPage(): React.JSX.Element {
         continue;
       }
       announced.current.add(match.matchKey);
-      new Notification(`9470 Queue Alert: ${match.compLevel.toUpperCase()} ${match.matchNumber}`, {
+      new Notification(`9470 Queue Alert: ${matchLabel(match)}`, {
         body: queueCountdown(match.queueTimeIso)
       });
     }
@@ -165,6 +257,20 @@ export default function DashboardPage(): React.JSX.Element {
 
   const nowQueueingMatches = useMemo(() => matches.filter(isNowQueueing), [matches]);
   const upcomingMatches = useMemo(() => matches.filter((match) => !isNowQueueing(match)), [matches]);
+  const focusMatch = useMemo(
+    () => pickNextFocusMatch(nowQueueingMatches, upcomingMatches, runSummaryByMatch),
+    [nowQueueingMatches, upcomingMatches, runSummaryByMatch]
+  );
+  const focusSummary = focusMatch ? (runSummaryByMatch[focusMatch.matchKey] ?? emptyRunSummary(focusMatch.matchKey)) : null;
+  const focusCopy = focusMatch && focusSummary ? buildFocusBoardCopy(focusMatch, focusSummary) : null;
+  const additionalQueueingMatches = useMemo(
+    () => nowQueueingMatches.filter((match) => match.matchKey !== focusMatch?.matchKey),
+    [focusMatch?.matchKey, nowQueueingMatches]
+  );
+  const remainingUpcomingMatches = useMemo(
+    () => upcomingMatches.filter((match) => match.matchKey !== focusMatch?.matchKey),
+    [focusMatch?.matchKey, upcomingMatches]
+  );
 
   const requestNotifications = async (): Promise<void> => {
     if (typeof Notification === "undefined") {
@@ -175,33 +281,42 @@ export default function DashboardPage(): React.JSX.Element {
     setNotificationPermission(result);
   };
 
+  const liveModeConfigWarning =
+    settings?.dataMode === "live" &&
+    integrationStatus &&
+    (!integrationStatus.nexus.configured || !integrationStatus.tba.configured);
+
   return (
     <div className="col" style={{ gap: 14 }}>
-      <section className="card col">
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <div>
-            <div className="label">Active Event</div>
-            <div className="value" style={{ fontSize: "1.2rem", fontWeight: 700 }}>
-              {settings?.eventKey || "Not configured"}
+      <section className="card dashboard-toolbar">
+        <div className="dashboard-toolbar-row">
+          <div className="dashboard-toolbar-main">
+            <div className="label">Pit Board</div>
+            <div className="dashboard-event-row">
+              <div className="dashboard-event-name">{settings?.eventKey || "Not configured"}</div>
+              {source ? (
+                <span className={`pill ${source === "MOCK" ? "upcoming" : fallback ? "queue" : "field"}`}>
+                  {source === "MOCK" ? "Mock feed" : fallback ? `${source} fallback` : source}
+                </span>
+              ) : null}
+              {usingSnapshot ? <span className="pill queue">Offline snapshot</span> : null}
+            </div>
+            <div className="dashboard-toolbar-meta">
+              <span>Team {settings?.teamNumber ?? 9470}</span>
+              <span>Queue lead {settings?.queueLeadMinutes ?? 20}m</span>
+              <span>{lastUpdated ? `Updated ${new Date(lastUpdated).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Not synced yet"}</span>
             </div>
           </div>
-          <button className="button secondary" onClick={() => void refresh()} type="button">
-            Refresh
-          </button>
-        </div>
-
-        <div className="grid two">
-          <div>
-            <div className="label">Team</div>
-            <div className="value">{settings?.teamNumber ?? 9470}</div>
-          </div>
-          <div>
-            <div className="label">Queue Lead</div>
-            <div className="value">{settings?.queueLeadMinutes ?? 20} min</div>
-          </div>
-          <div>
-            <div className="label">Data Mode</div>
-            <div className="value">{settings?.dataMode === "mock" ? "Mock" : "Live"}</div>
+          <div className="dashboard-toolbar-actions">
+            <button className="button secondary" type="button" onClick={() => void requestNotifications()}>
+              {notificationPermission === "granted" ? "Alerts on" : "Enable alerts"}
+            </button>
+            <button className="button secondary" onClick={() => void refresh()} type="button">
+              Refresh
+            </button>
+            <Link className="button secondary" href="/settings">
+              Settings
+            </Link>
           </div>
         </div>
 
@@ -211,60 +326,107 @@ export default function DashboardPage(): React.JSX.Element {
           </div>
         ) : null}
 
-        <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-          <div className="label">
-            Source: {source ?? "-"}
-            {fallback ? " (Fallback)" : ""}
-            {usingSnapshot ? " • Offline Snapshot" : ""}
-          </div>
-          <div className="label">Updated: {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : "-"}</div>
-        </div>
-
-        {integrationStatus ? (
-          <div className="label">
-            Nexus key: {integrationStatus.nexus.configured ? "set" : "missing"} • TBA key: {integrationStatus.tba.configured ? "set" : "missing"}
-          </div>
-        ) : null}
         {settings?.dataMode === "mock" ? (
-          <div className="inline-msg">
-            Mock mode is active. Matches are generated locally for testing pit workflows.
-          </div>
+          <div className="label">Mock mode is active. Use it to test dashboard timing, preflight flow, and delayed checks before the event starts.</div>
         ) : null}
-      </section>
-
-      <section className="col" style={{ gap: 10 }}>
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <h2 style={{ margin: 0 }}>Now Queueing</h2>
-          <button className="button secondary" type="button" onClick={() => void requestNotifications()}>
-            {notificationPermission === "granted" ? "Alerts On" : "Enable Alerts"}
-          </button>
-        </div>
 
         {notificationPermission === "denied" ? (
-          <div className="label">Notifications blocked by browser. In-app warnings still shown below.</div>
+          <div className="label">Notifications are blocked by the browser. The board still updates in-app.</div>
         ) : null}
         {notificationPermission === "unsupported" ? (
           <div className="label">Browser notifications are not supported on this device.</div>
         ) : null}
 
-        {loading ? (
-          <div className="card">Loading matches...</div>
-        ) : nowQueueingMatches.length ? (
-          nowQueueingMatches.map((match) => (
-            <MatchCardView key={`queueing-${match.matchKey}`} match={match} runState={runStateByMatch[match.matchKey]} />
-          ))
-        ) : (
-          <div className="card">No matches currently queueing.</div>
-        )}
+        {liveModeConfigWarning ? (
+          <div className="inline-msg warn">Live mode is selected, but one or more API keys are missing. Mock mode will be safer until credentials are complete.</div>
+        ) : null}
+        {error ? <div className="inline-msg warn">{error}</div> : null}
       </section>
 
+      {loading && !focusMatch ? <section className="card">Loading matches...</section> : null}
+
+      {focusMatch && focusSummary && focusCopy ? (
+        <section className={`card ready-board tone-${focusCopy.tone}`}>
+          <div className="ready-board-top">
+            <div className="col" style={{ gap: 6 }}>
+              <div className="ready-board-kicker">{focusCopy.eyebrow}</div>
+              <h2 style={{ margin: 0 }}>{focusCopy.title}</h2>
+              <div className="ready-board-guidance">{focusCopy.guidance}</div>
+              <div className="ready-board-inline">
+                <span className={`pill ${statusClass(focusMatch.status)}`}>{focusMatch.status.replaceAll("_", " ")}</span>
+                <span className={`pill ${summaryStatusTone(focusSummary)}`}>Checklist {summaryStatusLabel(focusSummary)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="ready-board-grid">
+            <div className="ready-board-block">
+              <div className="label">Queue</div>
+              <div className="value">{queueCountdown(focusMatch.queueTimeIso)}</div>
+              <div className="label">At {formatTime(focusMatch.queueTimeIso)}</div>
+            </div>
+            <div className="ready-board-block">
+              <div className="label">Field</div>
+              <div className="value">{formatTime(focusMatch.expectedStartTimeIso)}</div>
+              <div className="label">On deck {formatTime(focusMatch.onDeckTimeIso)}</div>
+            </div>
+            <div className="ready-board-block">
+              <div className="label">Checklist</div>
+              <div className="value">{summaryProgressLabel(focusSummary)}</div>
+              <div className={`label alliance ${focusMatch.allianceColor}`}>{focusMatch.allianceColor.toUpperCase()} alliance</div>
+            </div>
+          </div>
+
+          <div className="team-rows">
+            <div className="team-row">
+              <span className="team-side">ALLY</span>
+              <span className={`team-values alliance ${focusMatch.allianceColor}`}>{focusMatch.allianceTeams.join(" • ")}</span>
+            </div>
+            <div className="team-row">
+              <span className="team-side">OPP</span>
+              <span className={`team-values alliance ${focusMatch.allianceColor === "red" ? "blue" : focusMatch.allianceColor === "blue" ? "red" : "unknown"}`}>
+                {focusMatch.opponentTeams.join(" • ")}
+              </span>
+            </div>
+          </div>
+
+          <div className="ready-board-actions">
+            <Link className="button" href={`/match/${encodeURIComponent(focusMatch.matchKey)}/preflight`}>
+              {checklistActionText(focusMatch, focusSummary)}
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
+      {!loading && settings?.eventKey && !focusMatch ? (
+        <section className="card">No upcoming matches right now.</section>
+      ) : null}
+
+      {additionalQueueingMatches.length > 0 ? (
+        <section className="col" style={{ gap: 10 }}>
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <h2 style={{ margin: 0 }}>Also Queueing</h2>
+            <span className="label">{additionalQueueingMatches.length} more</span>
+          </div>
+          {additionalQueueingMatches.map((match) => (
+            <MatchCardView
+              key={`queueing-${match.matchKey}`}
+              match={match}
+              summary={runSummaryByMatch[match.matchKey] ?? emptyRunSummary(match.matchKey)}
+            />
+          ))}
+        </section>
+      ) : null}
+
       <section className="col" style={{ gap: 10 }}>
-        <h2 style={{ margin: 0 }}>Upcoming Matches</h2>
-        {error ? <div className="inline-msg warn">{error}</div> : null}
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <h2 style={{ margin: 0 }}>Next Up</h2>
+          {!loading && remainingUpcomingMatches.length ? <span className="label">{remainingUpcomingMatches.length} queued later</span> : null}
+        </div>
         {loading ? <div className="card">Loading matches...</div> : null}
-        {!loading && !upcomingMatches.length ? <div className="card">No additional upcoming matches right now.</div> : null}
-        {upcomingMatches.map((match) => (
-          <MatchCardView key={match.matchKey} match={match} runState={runStateByMatch[match.matchKey]} />
+        {!loading && !remainingUpcomingMatches.length ? <div className="card">No additional matches to prep right now.</div> : null}
+        {remainingUpcomingMatches.map((match) => (
+          <MatchCardView key={match.matchKey} match={match} summary={runSummaryByMatch[match.matchKey] ?? emptyRunSummary(match.matchKey)} />
         ))}
       </section>
     </div>

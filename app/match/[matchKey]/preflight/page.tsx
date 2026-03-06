@@ -10,10 +10,13 @@ import {
   isStepPassing
 } from "@/src/checklist/evaluation";
 import { PRE_FLIGHT_9470_STEPS } from "@/src/checklist/preflight9470";
-import { getRun, getSettings, saveRun } from "@/src/storage/localDb";
+import { getMatchesSnapshot, getRun, getSettings, saveMatchesSnapshot, saveRun } from "@/src/storage/localDb";
+import { queueCountdown } from "@/src/matches/pitFlow";
 import type {
   AppSettings,
   ChecklistStep,
+  MatchCard,
+  MatchesPayload,
   PreflightActionCard,
   PreflightRun,
   StepResponse
@@ -185,6 +188,13 @@ function formatCardAge(createdAtIso: string): string {
   return `${minutes} min`;
 }
 
+function formatTime(iso: string | null): string {
+  if (!iso) {
+    return "TBD";
+  }
+  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
 function statCounts(responses: StepResponse[]): {
   passed: number;
   overridden: number;
@@ -222,12 +232,38 @@ function statCounts(responses: StepResponse[]): {
   return { passed, overridden, inProgress, blocked, unanswered };
 }
 
-function runStatusClass(state: PreflightRun["state"]): string {
-  if (state === "READY") {
+function runStatusClass(run: PreflightRun, openActionCardCount: number): string {
+  if (run.state === "READY") {
     return "field";
   }
-  if (state === "BLOCKED") {
+  if (openActionCardCount > 0 || run.state === "BLOCKED") {
     return "queue";
+  }
+  return "upcoming";
+}
+
+function runStatusLabel(run: PreflightRun, openActionCardCount: number): string {
+  if (run.state === "READY") {
+    return "READY";
+  }
+  if (openActionCardCount > 0) {
+    return openActionCardCount === 1 ? "1 DELAY OPEN" : `${openActionCardCount} DELAYS OPEN`;
+  }
+  return "IN CHECKLIST";
+}
+
+function matchStatusClass(status: MatchCard["status"]): string {
+  if (status === "QUEUE") {
+    return "queue";
+  }
+  if (status === "ON_DECK") {
+    return "deck";
+  }
+  if (status === "ON_FIELD_SOON") {
+    return "field";
+  }
+  if (status === "COMPLETED") {
+    return "done";
   }
   return "upcoming";
 }
@@ -330,6 +366,7 @@ export default function PreflightPage(): React.JSX.Element {
   const matchKey = decodeURIComponent(Array.isArray(rawMatchKey) ? rawMatchKey[0] : rawMatchKey ?? "");
 
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [matchContext, setMatchContext] = useState<MatchCard | null>(null);
   const [run, setRun] = useState<PreflightRun | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
@@ -341,10 +378,35 @@ export default function PreflightPage(): React.JSX.Element {
       setSettings(appSettings);
 
       if (!appSettings.eventKey) {
+        setMatchContext(null);
         setRun(null);
         setUndoState(null);
         return;
       }
+
+      const snapshot = await getMatchesSnapshot(appSettings.eventKey, appSettings.teamNumber);
+      const snapshotMatch = snapshot?.matches.find((item) => item.matchKey === matchKey) ?? null;
+      setMatchContext(snapshotMatch);
+
+      const modeParam = appSettings.dataMode === "mock" ? "&mode=mock" : "";
+      fetch(
+        `/api/matches?team=${encodeURIComponent(String(appSettings.teamNumber))}&event=${encodeURIComponent(appSettings.eventKey)}&leadMinutes=${encodeURIComponent(String(appSettings.queueLeadMinutes))}${modeParam}`,
+        { cache: "no-store" }
+      )
+        .then(async (res) => {
+          if (!res.ok) {
+            throw new Error(`API request failed with ${res.status}`);
+          }
+          return (await res.json()) as MatchesPayload;
+        })
+        .then(async (payload) => {
+          const currentMatch = payload.matches.find((item) => item.matchKey === matchKey) ?? null;
+          setMatchContext(currentMatch);
+          await saveMatchesSnapshot(appSettings.eventKey, appSettings.teamNumber, payload);
+        })
+        .catch(() => {
+          // Snapshot context is enough for checklist flow.
+        });
 
       const existing = await getRun(appSettings.eventKey, matchKey);
       if (existing) {
@@ -601,6 +663,8 @@ export default function PreflightPage(): React.JSX.Element {
 
   const allComplete = PRE_FLIGHT_9470_STEPS.every((item) => isResponseComplete(getResponse(run, item.id)));
   const canFinalize = allComplete && openActionCards.length === 0;
+  const matchTitle = matchContext ? `${matchContext.compLevel.toUpperCase()} ${matchContext.matchNumber} Preflight` : "Preflight";
+  const matchSubtitle = matchContext ? queueCountdown(matchContext.queueTimeIso) : settings?.eventKey ?? matchKey;
 
   const markReady = async (): Promise<void> => {
     if (!run || !canFinalize || isLocked) {
@@ -647,25 +711,66 @@ export default function PreflightPage(): React.JSX.Element {
       <section className="card preflight-overview">
         <div className="preflight-head">
           <div>
-            <h1>Preflight</h1>
-            <div className="label">{settings.eventKey}</div>
-            <div className="value preflight-match-key">{matchKey}</div>
+            <div className="ready-board-kicker">{matchSubtitle}</div>
+            <h1>{matchTitle}</h1>
+            <div className="ready-board-inline">
+              <span className={`pill ${runStatusClass(run, openActionCards.length)}`}>{runStatusLabel(run, openActionCards.length)}</span>
+              {matchContext ? (
+                <span className={`pill ${matchStatusClass(matchContext.status)}`}>{matchContext.status.replaceAll("_", " ")}</span>
+              ) : null}
+            </div>
           </div>
-          <span className={`pill ${runStatusClass(run.state)}`}>{run.state.replaceAll("_", " ")}</span>
         </div>
+
+        {matchContext ? (
+          <>
+            <div className="preflight-context-grid">
+              <div className="preflight-context-block">
+                <div className="label">Queue</div>
+                <div className="value">{formatTime(matchContext.queueTimeIso)}</div>
+              </div>
+              <div className="preflight-context-block">
+                <div className="label">Field</div>
+                <div className="value">{formatTime(matchContext.expectedStartTimeIso)}</div>
+              </div>
+            </div>
+            <div className="team-rows">
+              <div className="team-row">
+                <span className="team-side">ALLY</span>
+                <span className={`team-values alliance ${matchContext.allianceColor}`}>{matchContext.allianceTeams.join(" • ")}</span>
+              </div>
+              <div className="team-row">
+                <span className="team-side">OPP</span>
+                <span className={`team-values alliance ${matchContext.allianceColor === "red" ? "blue" : matchContext.allianceColor === "blue" ? "red" : "unknown"}`}>
+                  {matchContext.opponentTeams.join(" • ")}
+                </span>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="label">
+            {settings.eventKey} • {matchKey}
+          </div>
+        )}
 
         <div className="progress-block">
           <div className="progress-meta compact">
             <span className="value progress-percent">{progressPercent}%</span>
             <span className="label">Step {stepIndex + 1} / {PRE_FLIGHT_9470_STEPS.length}</span>
-            <span className="label">Done {doneCount}</span>
-            <span className="label">Delayed {counts.inProgress}</span>
-            <span className="label">Blocking {counts.blocked}</span>
+            <span className="label">{doneCount} pass</span>
+            {counts.inProgress > 0 ? <span className="label">{counts.inProgress} delayed</span> : null}
+            {counts.unanswered > 0 ? <span className="label">{counts.unanswered} left</span> : null}
           </div>
           <div className="progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent}>
             <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
           </div>
         </div>
+
+        {openActionCards.length > 0 ? (
+          <div className="inline-msg">
+            Delayed items stay below so the checklist can keep moving. Resolve them before marking the match ready.
+          </div>
+        ) : null}
       </section>
 
       <section className="card step-card">
@@ -812,24 +917,31 @@ export default function PreflightPage(): React.JSX.Element {
       {openActionCards.length > 0 ? (
         <section className="card action-queue">
           <div className="row" style={{ justifyContent: "space-between" }}>
-            <h3>Delayed Queue</h3>
+            <div className="col" style={{ gap: 2 }}>
+              <h3>Delayed Items</h3>
+              <div className="label">Handed off to someone else while you keep advancing the checklist.</div>
+            </div>
             <span className="pill queue">{openActionCards.length} OPEN</span>
           </div>
           <div className="action-list">
-            {openActionCards.map((card) => (
-              <article key={card.id} className="action-item">
-                <div className="action-item-top">
+            {openActionCards.map((card) => {
+              const cardStep = getStepById(card.stepId);
+              return (
+                <article key={card.id} className="action-item">
+                  <div className="action-item-top">
+                    <div className="step-subcategory">{cardStep?.category ?? "General"}</div>
+                    <div className="label">{formatCardAge(card.createdAtIso)}</div>
+                  </div>
                   <div className="action-step">{card.stepPrompt}</div>
-                  <div className="label">{formatCardAge(card.createdAtIso)}</div>
-                </div>
-                <div className="action-note">{card.note}</div>
-                <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
-                  <button className="button small" type="button" onClick={() => void markActionCardFixed(card.id)}>
-                    Mark Pass
-                  </button>
-                </div>
-              </article>
-            ))}
+                  <div className="action-note">Tap pass when the fix comes back complete.</div>
+                  <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                    <button className="button small" type="button" onClick={() => void markActionCardFixed(card.id)}>
+                      Mark Pass
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </section>
       ) : null}

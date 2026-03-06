@@ -1,0 +1,60 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - link "Team 9470 logo FRC 9470 Pit" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - img "Team 9470 logo" [ref=e5]
+      - generic [ref=e6]:
+        - text: FRC
+        - strong [ref=e7]: "9470"
+        - text: Pit
+    - generic [ref=e8]:
+      - link "Dashboard" [ref=e9] [cursor=pointer]:
+        - /url: /
+      - link "History" [ref=e10] [cursor=pointer]:
+        - /url: /history
+      - link "Settings" [ref=e11] [cursor=pointer]:
+        - /url: /settings
+  - main [ref=e12]:
+    - generic [ref=e203]:
+      - generic [ref=e204]:
+        - generic [ref=e206]:
+          - generic [ref=e207]: 12 min past queue
+          - heading "QM 1 Preflight" [level=1] [ref=e208]
+          - generic [ref=e209]:
+            - generic [ref=e210]: IN CHECKLIST
+            - generic [ref=e211]: QUEUE
+        - generic [ref=e212]:
+          - generic [ref=e213]:
+            - generic [ref=e214]: Queue
+            - generic [ref=e215]: 12:32 AM
+          - generic [ref=e216]:
+            - generic [ref=e217]: Field
+            - generic [ref=e218]: 12:52 AM
+        - generic [ref=e219]:
+          - generic [ref=e220]:
+            - generic [ref=e221]: ALLY
+            - generic [ref=e222]: 9470 • 1114 • 1678
+          - generic [ref=e223]:
+            - generic [ref=e224]: OPP
+            - generic [ref=e225]: 581 • 5940 • 4414
+        - generic [ref=e226]:
+          - generic [ref=e227]:
+            - generic [ref=e228]: 0%
+            - generic [ref=e229]: Step 1 / 38
+            - generic [ref=e230]: 0 pass
+            - generic [ref=e231]: 38 left
+          - progressbar [ref=e232]
+      - generic [ref=e233]:
+        - generic [ref=e235]: Step 1 of 38
+        - generic [ref=e236]: Hopper
+        - heading "Verify hopper screws are tight and Loctite is applied" [level=2] [ref=e237]
+        - generic [ref=e238]:
+          - button "Pass" [ref=e239] [cursor=pointer]
+          - button "Delay" [ref=e240] [cursor=pointer]
+        - button "Previous Step" [disabled] [ref=e242]
+      - generic [ref=e243]:
+        - heading "Finalize" [level=2] [ref=e244]
+        - generic [ref=e245]: You can mark ready only when every step passes and delayed cards are resolved.
+        - generic [ref=e246]: 38 checklist step(s) still unanswered.
+        - button "Mark Match Ready" [disabled] [ref=e247]
+  - alert [ref=e35]

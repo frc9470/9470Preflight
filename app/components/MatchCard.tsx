@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 
+import { queueCountdown } from "@/src/matches/pitFlow";
 import type { MatchCard, PreflightRunState } from "@/src/types/domain";
+import {
+  summaryProgressLabel,
+  summaryStatusLabel,
+  summaryStatusTone,
+  type MatchRunSummary
+} from "@/src/runs/summary";
 
 function formatTime(iso: string | null): string {
   if (!iso) {
@@ -61,15 +68,22 @@ function checklistStatePill(runState: PreflightRunState | undefined): "upcoming"
 }
 
 export function MatchCardView(
-  { match, runState }: { match: MatchCard; runState?: PreflightRunState }
+  { match, summary }: { match: MatchCard; summary?: MatchRunSummary }
 ): React.JSX.Element {
   const allianceLabel = match.allianceColor.toUpperCase();
   const allianceTeams = match.allianceTeams.length ? match.allianceTeams.join(" • ") : "Unknown";
   const opponentTeams = match.opponentTeams.length ? match.opponentTeams.join(" • ") : "Unknown";
   const opponentColor = opposingColor(match.allianceColor);
-  const checklistText = checklistStateLabel(runState);
-  const checklistPillClass = checklistStatePill(runState);
-  const checklistActionText = runState ? (runState === "READY" ? "Review checklist" : "Resume checklist") : "Start checklist";
+  const resolvedSummary = summary;
+  const checklistText = resolvedSummary ? summaryStatusLabel(resolvedSummary) : checklistStateLabel(undefined);
+  const checklistPillClass = resolvedSummary ? summaryStatusTone(resolvedSummary) : checklistStatePill(undefined);
+  const checklistActionText = !resolvedSummary?.hasRun
+    ? "Start preflight"
+    : resolvedSummary.runState === "READY"
+      ? "Review ready"
+      : resolvedSummary.openActionCards > 0
+        ? "Resolve delays"
+        : "Resume checklist";
 
   return (
     <Link className="card match-card" href={`/match/${encodeURIComponent(match.matchKey)}/preflight`}>
@@ -80,7 +94,7 @@ export function MatchCardView(
           </div>
           <div className="match-meta">
             <span className={`alliance ${match.allianceColor}`}>{allianceLabel}</span>
-            <span>Queue {formatTime(match.queueTimeIso)}</span>
+            <span>{queueCountdown(match.queueTimeIso)}</span>
             <span>ETA {formatTime(match.expectedStartTimeIso)}</span>
           </div>
         </div>
@@ -99,7 +113,10 @@ export function MatchCardView(
       </div>
 
       <div className="match-footer">
-        <span className={`pill ${checklistPillClass}`}>Checklist {checklistText}</span>
+        <div className="match-footer-meta">
+          <span className={`pill ${checklistPillClass}`}>Checklist {checklistText}</span>
+          <span className="label">{resolvedSummary ? summaryProgressLabel(resolvedSummary) : "0/38 pass"}</span>
+        </div>
         <span className="label">{checklistActionText}</span>
       </div>
     </Link>

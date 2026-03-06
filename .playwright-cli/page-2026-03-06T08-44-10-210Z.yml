@@ -1,0 +1,46 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - link "Team 9470 logo FRC 9470 Pit" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - img "Team 9470 logo" [ref=e5]
+      - generic [ref=e6]:
+        - text: FRC
+        - strong [ref=e7]: "9470"
+        - text: Pit
+    - generic [ref=e8]:
+      - link "Dashboard" [ref=e9] [cursor=pointer]:
+        - /url: /
+      - link "History" [ref=e10] [cursor=pointer]:
+        - /url: /history
+      - link "Settings" [ref=e11] [cursor=pointer]:
+        - /url: /settings
+  - main [ref=e12]:
+    - generic [ref=e37]:
+      - heading "Settings" [level=1] [ref=e38]
+      - generic [ref=e39]: Manual event setup for shared pit device mode.
+      - generic [ref=e40]:
+        - generic [ref=e41]:
+          - generic [ref=e42]: Team Number
+          - spinbutton "Team Number" [ref=e43]: "9470"
+        - generic [ref=e44]:
+          - generic [ref=e45]: Event Key
+          - textbox "Event Key" [ref=e46]:
+            - /placeholder: 2026casj
+        - generic [ref=e47]:
+          - generic [ref=e48]: Queue Lead Time (minutes)
+          - spinbutton "Queue Lead Time (minutes)" [ref=e49]: "20"
+        - generic [ref=e50]:
+          - generic [ref=e51]: Data Mode
+          - combobox "Data Mode Use Mock mode before event data is available to test queue cards, checklist flow, and history." [ref=e52]:
+            - option "Live (Nexus → TBA fallback)"
+            - option "Mock (generated test schedule)" [selected]
+          - generic [ref=e53]: Use Mock mode before event data is available to test queue cards, checklist flow, and history.
+        - button "Save Settings" [ref=e54] [cursor=pointer]
+      - generic [ref=e55]:
+        - heading "Env Vars" [level=2] [ref=e56]
+        - generic [ref=e57]: "Set these on deploy/runtime:"
+        - code [ref=e58]: NEXUS_API_KEY
+        - code [ref=e59]: TBA_API_KEY
+        - code [ref=e60]: NEXUS_BASE_URL (optional)
+        - code [ref=e61]: TBA_BASE_URL (optional)
+  - alert [ref=e35]

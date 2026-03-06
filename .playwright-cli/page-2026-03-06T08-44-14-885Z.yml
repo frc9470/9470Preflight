@@ -1,0 +1,162 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - link "Team 9470 logo FRC 9470 Pit" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - img "Team 9470 logo" [ref=e5]
+      - generic [ref=e6]:
+        - text: FRC
+        - strong [ref=e7]: "9470"
+        - text: Pit
+    - generic [ref=e8]:
+      - link "Dashboard" [active] [ref=e9] [cursor=pointer]:
+        - /url: /
+      - link "History" [ref=e10] [cursor=pointer]:
+        - /url: /history
+      - link "Settings" [ref=e11] [cursor=pointer]:
+        - /url: /settings
+  - main [ref=e12]:
+    - generic [ref=e63]:
+      - generic [ref=e64]:
+        - generic [ref=e65]:
+          - generic [ref=e66]:
+            - generic [ref=e67]: Pit Board
+            - generic [ref=e68]:
+              - generic [ref=e69]: practice
+              - generic [ref=e70]: Mock feed
+            - generic [ref=e71]:
+              - generic [ref=e72]: Team 9470
+              - generic [ref=e73]: Queue lead 20m
+              - generic [ref=e74]: Updated 12:44 AM
+          - generic [ref=e75]:
+            - button "Enable alerts" [ref=e76] [cursor=pointer]
+            - button "Refresh" [ref=e77] [cursor=pointer]
+            - link "Settings" [ref=e78] [cursor=pointer]:
+              - /url: /settings
+        - generic [ref=e79]: Mock mode is active. Use it to test dashboard timing, preflight flow, and delayed checks before the event starts.
+      - generic [ref=e80]:
+        - generic [ref=e82]:
+          - generic [ref=e83]: Do now
+          - heading "Start QM 1 preflight now" [level=2] [ref=e84]
+          - generic [ref=e85]: Queue is already open. Work this match first instead of looking ahead.
+          - generic [ref=e86]:
+            - generic [ref=e87]: QUEUE
+            - generic [ref=e88]: Checklist Not started
+        - generic [ref=e89]:
+          - generic [ref=e90]:
+            - generic [ref=e91]: Queue
+            - generic [ref=e92]: 12 min past queue
+            - generic [ref=e93]: At 12:32 AM
+          - generic [ref=e94]:
+            - generic [ref=e95]: Field
+            - generic [ref=e96]: 12:52 AM
+            - generic [ref=e97]: On deck 12:47 AM
+          - generic [ref=e98]:
+            - generic [ref=e99]: Checklist
+            - generic [ref=e100]: 0/38 pass
+            - generic [ref=e101]: RED alliance
+        - generic [ref=e102]:
+          - generic [ref=e103]:
+            - generic [ref=e104]: ALLY
+            - generic [ref=e105]: 9470 • 1114 • 1678
+          - generic [ref=e106]:
+            - generic [ref=e107]: OPP
+            - generic [ref=e108]: 581 • 5940 • 4414
+        - link "Start preflight" [ref=e110] [cursor=pointer]:
+          - /url: /match/practice_qm1/preflight
+      - generic [ref=e111]:
+        - generic [ref=e112]:
+          - heading "Also Queueing" [level=2] [ref=e113]
+          - generic [ref=e114]: 1 more
+        - link "QM 2 BLUE •2 min past queue •ETA 1:02 AM QUEUE ALLY 9470 • 254 • 971 OPP 649 • 846 • 973 Checklist Not started 0/38 pass Start preflight" [ref=e115] [cursor=pointer]:
+          - /url: /match/practice_qm2/preflight
+          - generic [ref=e116]:
+            - generic [ref=e117]:
+              - generic [ref=e118]: QM 2
+              - generic [ref=e119]:
+                - generic [ref=e120]: BLUE
+                - generic [ref=e121]: •2 min past queue
+                - generic [ref=e122]: •ETA 1:02 AM
+            - generic [ref=e123]: QUEUE
+          - generic [ref=e124]:
+            - generic [ref=e125]:
+              - generic [ref=e126]: ALLY
+              - generic [ref=e127]: 9470 • 254 • 971
+            - generic [ref=e128]:
+              - generic [ref=e129]: OPP
+              - generic [ref=e130]: 649 • 846 • 973
+          - generic [ref=e131]:
+            - generic [ref=e132]:
+              - generic [ref=e133]: Checklist Not started
+              - generic [ref=e134]: 0/38 pass
+            - generic [ref=e135]: Start preflight
+      - generic [ref=e136]:
+        - generic [ref=e137]:
+          - heading "Next Up" [level=2] [ref=e138]
+          - generic [ref=e139]: 3 queued later
+        - link "QM 4 BLUE •18 min to queue •ETA 1:22 AM UPCOMING ALLY 9470 • 581 • 5940 OPP 199 • 1257 • 3476 Checklist Not started 0/38 pass Start preflight" [ref=e140] [cursor=pointer]:
+          - /url: /match/practice_qm4/preflight
+          - generic [ref=e141]:
+            - generic [ref=e142]:
+              - generic [ref=e143]: QM 4
+              - generic [ref=e144]:
+                - generic [ref=e145]: BLUE
+                - generic [ref=e146]: •18 min to queue
+                - generic [ref=e147]: •ETA 1:22 AM
+            - generic [ref=e148]: UPCOMING
+          - generic [ref=e149]:
+            - generic [ref=e150]:
+              - generic [ref=e151]: ALLY
+              - generic [ref=e152]: 9470 • 581 • 5940
+            - generic [ref=e153]:
+              - generic [ref=e154]: OPP
+              - generic [ref=e155]: 199 • 1257 • 3476
+          - generic [ref=e156]:
+            - generic [ref=e157]:
+              - generic [ref=e158]: Checklist Not started
+              - generic [ref=e159]: 0/38 pass
+            - generic [ref=e160]: Start preflight
+        - link "QM 5 RED •28 min to queue •ETA 1:32 AM UPCOMING ALLY 9470 • 649 • 846 OPP 1538 • 701 • 852 Checklist Not started 0/38 pass Start preflight" [ref=e161] [cursor=pointer]:
+          - /url: /match/practice_qm5/preflight
+          - generic [ref=e162]:
+            - generic [ref=e163]:
+              - generic [ref=e164]: QM 5
+              - generic [ref=e165]:
+                - generic [ref=e166]: RED
+                - generic [ref=e167]: •28 min to queue
+                - generic [ref=e168]: •ETA 1:32 AM
+            - generic [ref=e169]: UPCOMING
+          - generic [ref=e170]:
+            - generic [ref=e171]:
+              - generic [ref=e172]: ALLY
+              - generic [ref=e173]: 9470 • 649 • 846
+            - generic [ref=e174]:
+              - generic [ref=e175]: OPP
+              - generic [ref=e176]: 1538 • 701 • 852
+          - generic [ref=e177]:
+            - generic [ref=e178]:
+              - generic [ref=e179]: Checklist Not started
+              - generic [ref=e180]: 0/38 pass
+            - generic [ref=e181]: Start preflight
+        - link "QM 6 BLUE •38 min to queue •ETA 1:42 AM UPCOMING ALLY 9470 • 115 • 2485 OPP 1114 • 1678 • 6328 Checklist Not started 0/38 pass Start preflight" [ref=e182] [cursor=pointer]:
+          - /url: /match/practice_qm6/preflight
+          - generic [ref=e183]:
+            - generic [ref=e184]:
+              - generic [ref=e185]: QM 6
+              - generic [ref=e186]:
+                - generic [ref=e187]: BLUE
+                - generic [ref=e188]: •38 min to queue
+                - generic [ref=e189]: •ETA 1:42 AM
+            - generic [ref=e190]: UPCOMING
+          - generic [ref=e191]:
+            - generic [ref=e192]:
+              - generic [ref=e193]: ALLY
+              - generic [ref=e194]: 9470 • 115 • 2485
+            - generic [ref=e195]:
+              - generic [ref=e196]: OPP
+              - generic [ref=e197]: 1114 • 1678 • 6328
+          - generic [ref=e198]:
+            - generic [ref=e199]:
+              - generic [ref=e200]: Checklist Not started
+              - generic [ref=e201]: 0/38 pass
+            - generic [ref=e202]: Start preflight
+  - alert [ref=e35]

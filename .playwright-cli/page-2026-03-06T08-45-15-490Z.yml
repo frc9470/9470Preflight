@@ -1,0 +1,79 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - link "Team 9470 logo FRC 9470 Pit" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - img "Team 9470 logo" [ref=e5]
+      - generic [ref=e6]:
+        - text: FRC
+        - strong [ref=e7]: "9470"
+        - text: Pit
+    - generic [ref=e8]:
+      - link "Dashboard" [ref=e9] [cursor=pointer]:
+        - /url: /
+      - link "History" [ref=e10] [cursor=pointer]:
+        - /url: /history
+      - link "Settings" [ref=e11] [cursor=pointer]:
+        - /url: /settings
+  - main [ref=e12]:
+    - generic [ref=e203]:
+      - generic [ref=e204]:
+        - generic [ref=e206]:
+          - generic [ref=e207]: 12 min past queue
+          - heading "QM 1 Preflight" [level=1] [ref=e208]
+          - generic [ref=e209]:
+            - generic [ref=e210]: 1 DELAY OPEN
+            - generic [ref=e211]: QUEUE
+        - generic [ref=e212]:
+          - generic [ref=e213]:
+            - generic [ref=e214]: Queue
+            - generic [ref=e215]: 12:32 AM
+          - generic [ref=e216]:
+            - generic [ref=e217]: Field
+            - generic [ref=e218]: 12:52 AM
+        - generic [ref=e219]:
+          - generic [ref=e220]:
+            - generic [ref=e221]: ALLY
+            - generic [ref=e222]: 9470 • 1114 • 1678
+          - generic [ref=e223]:
+            - generic [ref=e224]: OPP
+            - generic [ref=e225]: 581 • 5940 • 4414
+        - generic [ref=e226]:
+          - generic [ref=e227]:
+            - generic [ref=e228]: 3%
+            - generic [ref=e229]: Step 2 / 38
+            - generic [ref=e230]: 0 pass
+            - generic [ref=e248]: 1 delayed
+            - generic [ref=e231]: 37 left
+          - progressbar [ref=e232]
+        - generic [ref=e250]: Delayed items stay below so the checklist can keep moving. Resolve them before marking the match ready.
+      - generic [ref=e233]:
+        - generic [ref=e235]: Step 2 of 38
+        - generic [ref=e236]: Hopper
+        - heading "Inspect hopper pulleys for cracks or damage" [level=2] [ref=e251]
+        - generic [ref=e238]:
+          - button "Pass" [ref=e239] [cursor=pointer]
+          - button "Delay" [active] [ref=e240] [cursor=pointer]
+        - generic [ref=e241]:
+          - button "Previous Step" [ref=e242] [cursor=pointer]
+          - button "Undo Last Action" [ref=e252] [cursor=pointer]
+      - generic [ref=e253]:
+        - generic [ref=e254]:
+          - generic [ref=e255]:
+            - heading "Delayed Items" [level=3] [ref=e256]
+            - generic [ref=e257]: Handed off to someone else while you keep advancing the checklist.
+          - generic [ref=e258]: 1 OPEN
+        - article [ref=e260]:
+          - generic [ref=e261]:
+            - generic [ref=e262]: Hopper
+            - generic [ref=e263]: just now
+          - generic [ref=e264]: Verify hopper screws are tight and Loctite is applied
+          - generic [ref=e265]: Tap pass when the fix comes back complete.
+          - button "Mark Pass" [ref=e267] [cursor=pointer]
+      - generic [ref=e243]:
+        - heading "Finalize" [level=2] [ref=e244]
+        - generic [ref=e245]: You can mark ready only when every step passes and delayed cards are resolved.
+        - generic [ref=e268]: Resolve 1 delayed card(s) before finalizing.
+        - generic [ref=e246]: 37 checklist step(s) still unanswered.
+        - button "Mark Match Ready" [disabled] [ref=e247]
+        - generic [ref=e269]: Step delayed.
+  - alert [ref=e35]
