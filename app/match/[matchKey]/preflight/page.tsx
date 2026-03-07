@@ -1,8 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { useParams } from "next/navigation";
 
+import {
+  SWIPE_EDGE_GUTTER_PX,
+  classifySwipeDecision
+} from "@/src/checklist/gesture";
 import {
   computeRunState,
   isResponseComplete,
@@ -10,8 +22,8 @@ import {
   isStepPassing
 } from "@/src/checklist/evaluation";
 import { PRE_FLIGHT_9470_STEPS } from "@/src/checklist/preflight9470";
-import { getMatchesSnapshot, getRun, getSettings, saveMatchesSnapshot, saveRun } from "@/src/storage/localDb";
 import { queueCountdown } from "@/src/matches/pitFlow";
+import { getMatchesSnapshot, getRun, getSettings, saveMatchesSnapshot, saveRun } from "@/src/storage/localDb";
 import type {
   AppSettings,
   ChecklistStep,
@@ -22,10 +34,85 @@ import type {
   StepResponse
 } from "@/src/types/domain";
 
+const SWIPE_COACHMARK_STORAGE_KEY = "ui:9470-preflight-swipe-coachmark-dismissed";
+const FIRST_BOOLEAN_STEP_ID = PRE_FLIGHT_9470_STEPS.find((item) => item.kind === "boolean")?.id ?? "";
+
 type UndoState = {
   run: PreflightRun;
   stepIndex: number;
   label: string;
+};
+
+type StepCounts = {
+  passed: number;
+  overridden: number;
+  inProgress: number;
+  blocked: number;
+  unanswered: number;
+};
+
+type PreflightHeaderProps = {
+  matchContext: MatchCard | null;
+  matchKey: string;
+  matchSubtitle: string;
+  matchTitle: string;
+  progressPercent: number;
+  run: PreflightRun;
+  stepIndex: number;
+  counts: StepCounts;
+  delayedCount: number;
+  delayedOpen: boolean;
+  fallbackLabel: string;
+  onToggleDelayed: () => void;
+};
+
+type MeasurementPanelProps = {
+  step: ChecklistStep;
+  currentResponse: StepResponse | undefined;
+  isLocked: boolean;
+  onSetNumberLike: (value: number) => void | Promise<void>;
+};
+
+type SwipeDecisionCardProps = {
+  step: ChecklistStep;
+  stepIndex: number;
+  totalSteps: number;
+  currentResponse: StepResponse | undefined;
+  canPass: boolean;
+  isLocked: boolean;
+  showCoachmark: boolean;
+  onDismissCoachmark: () => void;
+  onPass: () => void | Promise<void>;
+  onDelay: () => void | Promise<void>;
+  children?: ReactNode;
+};
+
+type DelayedItemsDrawerProps = {
+  cards: PreflightActionCard[];
+  open: boolean;
+  onToggle: () => void;
+  onMarkActionCardFixed: (cardId: string) => void | Promise<void>;
+  containerRef: React.RefObject<HTMLElement>;
+};
+
+type ReadyFooterProps = {
+  canFinalize: boolean;
+  counts: StepCounts;
+  isLocked: boolean;
+  message: string | null;
+  openActionCardCount: number;
+  onMarkReady: () => void | Promise<void>;
+};
+
+type SwipePreview = "idle" | "pass" | "delay";
+
+type SwipeTrackingState = {
+  allowSwipe: boolean;
+  captured: boolean;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  viewportWidth: number;
 };
 
 function getResponse(run: PreflightRun | null, stepId: string): StepResponse | undefined {
@@ -195,13 +282,7 @@ function formatTime(iso: string | null): string {
   return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-function statCounts(responses: StepResponse[]): {
-  passed: number;
-  overridden: number;
-  inProgress: number;
-  blocked: number;
-  unanswered: number;
-} {
+function statCounts(responses: StepResponse[]): StepCounts {
   let passed = 0;
   let overridden = 0;
   let inProgress = 0;
@@ -266,6 +347,16 @@ function matchStatusClass(status: MatchCard["status"]): string {
     return "done";
   }
   return "upcoming";
+}
+
+function opposingAllianceColor(color: MatchCard["allianceColor"]): "red" | "blue" | "unknown" {
+  if (color === "red") {
+    return "blue";
+  }
+  if (color === "blue") {
+    return "red";
+  }
+  return "unknown";
 }
 
 function isBatteryVoltageStep(step: ChecklistStep): boolean {
@@ -360,6 +451,585 @@ function buildDecisionDraft(
   };
 }
 
+function readyFooterStatusText(
+  canFinalize: boolean,
+  counts: StepCounts,
+  isLocked: boolean,
+  openActionCardCount: number
+): string {
+  if (isLocked) {
+    return "Match is already marked ready.";
+  }
+  if (openActionCardCount > 0) {
+    return openActionCardCount === 1
+      ? "1 delayed item still needs a pass."
+      : `${openActionCardCount} delayed items still need a pass.`;
+  }
+  if (counts.unanswered > 0) {
+    return counts.unanswered === 1
+      ? "1 checklist step is still unanswered."
+      : `${counts.unanswered} checklist steps are still unanswered.`;
+  }
+  if (counts.blocked > 0) {
+    return counts.blocked === 1
+      ? "1 checklist step still needs a pass or delay."
+      : `${counts.blocked} checklist steps still need a pass or delay.`;
+  }
+  if (canFinalize) {
+    return "All checklist steps are clear. Match can be marked ready.";
+  }
+  return "Continue the checklist to clear remaining blockers.";
+}
+
+function readyFooterSummary(counts: StepCounts, isLocked: boolean, openActionCardCount: number): string {
+  if (isLocked) {
+    return "Match ready";
+  }
+  if (openActionCardCount > 0) {
+    return openActionCardCount === 1 ? "1 delayed" : `${openActionCardCount} delayed`;
+  }
+  if (counts.unanswered > 0) {
+    return counts.unanswered === 1 ? "1 left" : `${counts.unanswered} left`;
+  }
+  if (counts.blocked > 0) {
+    return counts.blocked === 1 ? "1 blocked" : `${counts.blocked} blocked`;
+  }
+  return "All clear";
+}
+
+function canPassCurrentStep(step: ChecklistStep, response: StepResponse | undefined): boolean {
+  if (step.kind === "boolean") {
+    return true;
+  }
+  return Boolean(response?.passed);
+}
+
+function PreflightHeader({
+  matchContext,
+  matchKey,
+  matchSubtitle,
+  matchTitle,
+  progressPercent,
+  run,
+  stepIndex,
+  counts,
+  delayedCount,
+  delayedOpen,
+  fallbackLabel,
+  onToggleDelayed
+}: PreflightHeaderProps): React.JSX.Element {
+  return (
+    <section className="card preflight-header-card">
+      <div className="preflight-header-top">
+        <div className="preflight-header-copy">
+          <div className="ready-board-kicker">{matchSubtitle}</div>
+          <div className="preflight-header-title-row">
+            <h1 className="preflight-title">{matchTitle}</h1>
+            <button
+              className={`drawer-chip ${delayedOpen ? "active" : ""}`}
+              type="button"
+              onClick={onToggleDelayed}
+              disabled={delayedCount === 0}
+            >
+              Delayed ({delayedCount})
+            </button>
+          </div>
+          <div className="ready-board-inline">
+            {delayedCount === 0 ? (
+              <span className={`pill ${runStatusClass(run, delayedCount)}`}>{runStatusLabel(run, delayedCount)}</span>
+            ) : null}
+            {matchContext ? (
+              <span className={`pill ${matchStatusClass(matchContext.status)}`}>{matchContext.status.replaceAll("_", " ")}</span>
+            ) : null}
+            {!matchContext ? <span className="pill subtle-pill">{fallbackLabel}</span> : null}
+          </div>
+        </div>
+      </div>
+
+      {matchContext ? (
+        <>
+          <div className="preflight-context-grid compact">
+            <div className="preflight-context-block">
+              <div className="label">Queue</div>
+              <div className="value">{formatTime(matchContext.queueTimeIso)}</div>
+            </div>
+            <div className="preflight-context-block">
+              <div className="label">Field</div>
+              <div className="value">{formatTime(matchContext.expectedStartTimeIso)}</div>
+            </div>
+          </div>
+          <div className="team-rows compact">
+            <div className="team-row">
+              <span className="team-side">ALLY</span>
+              <span className={`team-values alliance ${matchContext.allianceColor}`}>{matchContext.allianceTeams.join(" • ")}</span>
+            </div>
+            <div className="team-row">
+              <span className="team-side">OPP</span>
+              <span className={`team-values alliance ${opposingAllianceColor(matchContext.allianceColor)}`}>
+                {matchContext.opponentTeams.join(" • ")}
+              </span>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="label">{fallbackLabel || matchKey}</div>
+      )}
+
+      <div className="progress-block">
+        <div className="progress-meta compact">
+          <span className="value progress-percent">{progressPercent}%</span>
+          <span className="label">Step {stepIndex + 1} / {PRE_FLIGHT_9470_STEPS.length}</span>
+          {counts.unanswered > 0 ? <span className="label">{counts.unanswered} left</span> : null}
+          {counts.unanswered === 0 && delayedCount === 0 ? <span className="label">All clear</span> : null}
+        </div>
+        <div className="progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent}>
+          <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MeasurementPanel({
+  step,
+  currentResponse,
+  isLocked,
+  onSetNumberLike
+}: MeasurementPanelProps): React.JSX.Element | null {
+  if (step.kind === "boolean") {
+    return null;
+  }
+
+  const batteryStep = isBatteryVoltageStep(step);
+  const cameraStep = isCameraCountStep(step);
+  const measuredNumberValue =
+    step.kind === "number" && typeof currentResponse?.valueNumber === "number"
+      ? currentResponse.valueNumber
+      : 12.8;
+  const measuredCountValue =
+    step.kind === "counter" && typeof currentResponse?.valueCount === "number"
+      ? currentResponse.valueCount
+      : 0;
+  const passing = Boolean(currentResponse?.passed);
+  const target = step.min ?? 0;
+  const progressDots =
+    !cameraStep && step.kind === "counter" && target > 0 && target <= 8
+      ? Array.from({ length: target }, (_, index) => index < measuredCountValue)
+      : [];
+
+  if (batteryStep) {
+    return (
+      <div className="measurement-panel battery-panel">
+        <div className="measurement-header">
+          <span className="label">Battery voltage</span>
+          <span className={`measurement-status ${passing ? "met" : ""}`}>
+            {passing ? "Requirement met" : `Pass above ${Number(step.min ?? 0).toFixed(1)}V`}
+          </span>
+        </div>
+        <div className="measurement-hero">
+          <span className="measurement-hero-value">{measuredNumberValue.toFixed(2)}V</span>
+        </div>
+        <input
+          className="battery-range"
+          type="range"
+          min={11}
+          max={14}
+          step={0.05}
+          value={measuredNumberValue}
+          onChange={(event) => {
+            const numeric = Number(event.target.value);
+            if (Number.isFinite(numeric)) {
+              void onSetNumberLike(numeric);
+            }
+          }}
+          disabled={isLocked}
+        />
+        <div className="preset-row">
+          {[12.0, 12.5, 13.0, 13.3, 13.5].map((preset) => (
+            <button
+              key={`volt-${preset}`}
+              className={`measure-chip ${measuredNumberValue === preset ? "active" : ""}`}
+              type="button"
+              onClick={() => void onSetNumberLike(preset)}
+              disabled={isLocked}
+            >
+              {preset.toFixed(1)}V
+            </button>
+          ))}
+        </div>
+        <div className="measurement-hint">{requirementText(step)}. Set a passing value, then tap Pass.</div>
+      </div>
+    );
+  }
+
+  if (cameraStep) {
+    return (
+      <div className="measurement-panel">
+        <div className="measurement-header">
+          <span className="label">Camera count</span>
+          <span className={`measurement-status ${passing ? "met" : ""}`}>
+            {passing ? "Requirement met" : `Need ${target}+ cameras`}
+          </span>
+        </div>
+        <div className="measurement-hero compact">
+          <span className="measurement-hero-value">{measuredCountValue}</span>
+          <span className="measurement-hero-subvalue">selected</span>
+        </div>
+        <div className="camera-grid large">
+          {[0, 1, 2, 3, 4, 5].map((count) => (
+            <button
+              key={`camera-${count}`}
+              className={`camera-btn ${(measuredCountValue ?? 0) === count ? "active" : ""}`}
+              type="button"
+              onClick={() => void onSetNumberLike(count)}
+              disabled={isLocked}
+            >
+              {count}
+            </button>
+          ))}
+        </div>
+        <div className="measurement-hint">{requirementText(step)}. Set a passing value, then tap Pass.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="measurement-panel count-panel">
+      <div className="measurement-header">
+        <span className="label">Cycle count</span>
+        <span className={`measurement-status ${passing ? "met" : ""}`}>
+          {passing ? "Requirement met" : `Target ${target}`}
+        </span>
+      </div>
+      <div className="measurement-hero">
+        <span className="measurement-hero-value">{measuredCountValue}</span>
+        <span className="measurement-hero-subvalue">{target > 0 ? `of ${target} needed` : "counted"}</span>
+      </div>
+      {progressDots.length > 0 ? (
+        <div className="count-progress" aria-hidden="true">
+          {progressDots.map((filled, index) => (
+            <span key={`${step.id}-dot-${index}`} className={`count-progress-dot ${filled ? "filled" : ""}`} />
+          ))}
+        </div>
+      ) : null}
+      <div className="counter-stepper large">
+        <button
+          className="measure-action"
+          type="button"
+          onClick={() => void onSetNumberLike(Math.max(0, measuredCountValue - 1))}
+          disabled={isLocked}
+        >
+          -1
+        </button>
+        <button
+          className="measure-action primary"
+          type="button"
+          onClick={() => void onSetNumberLike(measuredCountValue + 1)}
+          disabled={isLocked}
+        >
+          +1
+        </button>
+        {target > 0 ? (
+          <button
+            className="measure-action"
+            type="button"
+            onClick={() => void onSetNumberLike(target)}
+            disabled={isLocked}
+          >
+            Set {target}
+          </button>
+        ) : null}
+      </div>
+      <div className="measurement-hint">{requirementText(step)}. Set a passing value, then tap Pass.</div>
+    </div>
+  );
+}
+
+function SwipeDecisionCard({
+  step,
+  stepIndex,
+  totalSteps,
+  currentResponse,
+  canPass,
+  isLocked,
+  showCoachmark,
+  onDismissCoachmark,
+  onPass,
+  onDelay,
+  children
+}: SwipeDecisionCardProps): React.JSX.Element {
+  const canSwipe = step.kind === "boolean" && !isLocked;
+  const cardRef = useRef<HTMLDivElement>(null);
+  const swipeState = useRef<SwipeTrackingState | null>(null);
+  const [dragX, setDragX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [preview, setPreview] = useState<SwipePreview>("idle");
+  const passReveal = dragX > 0 ? Math.min(1, Math.abs(dragX) / 112) : 0;
+  const delayReveal = dragX < 0 ? Math.min(1, Math.abs(dragX) / 112) : 0;
+  const swipeVisualStyle = canSwipe
+    ? ({
+        "--pass-reveal": passReveal.toString(),
+        "--delay-reveal": delayReveal.toString()
+      } as CSSProperties)
+    : undefined;
+
+  const resetSwipe = (): void => {
+    swipeState.current = null;
+    setDragX(0);
+    setDragging(false);
+    setPreview("idle");
+  };
+
+  useEffect(() => {
+    resetSwipe();
+  }, [step.id, isLocked]);
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (!canSwipe || !event.isPrimary) {
+      return;
+    }
+
+    swipeState.current = {
+      allowSwipe:
+        event.clientX > SWIPE_EDGE_GUTTER_PX &&
+        event.clientX < window.innerWidth - SWIPE_EDGE_GUTTER_PX,
+      captured: false,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      viewportWidth: window.innerWidth
+    };
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    const active = swipeState.current;
+    if (!active || active.pointerId !== event.pointerId || !active.allowSwipe) {
+      return;
+    }
+
+    const dx = event.clientX - active.startX;
+    const dy = event.clientY - active.startY;
+
+    if (Math.abs(dy) > Math.abs(dx) * 1.4 && Math.abs(dy) > 10) {
+      setDragX(0);
+      setDragging(false);
+      setPreview("idle");
+      return;
+    }
+
+    if (Math.abs(dx) < 5) {
+      setDragX(0);
+      setPreview("idle");
+      return;
+    }
+
+    const cardWidth = cardRef.current?.getBoundingClientRect().width ?? 320;
+    const maxDrag = cardWidth * 0.42;
+    const nextDrag = Math.max(-maxDrag, Math.min(maxDrag, dx));
+
+    if (!active.captured) {
+      active.captured = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+
+    setDragging(true);
+    setDragX(nextDrag);
+    setPreview(nextDrag > 16 ? "pass" : nextDrag < -16 ? "delay" : "idle");
+  };
+
+  const handlePointerEnd = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    const active = swipeState.current;
+    if (!active || active.pointerId !== event.pointerId) {
+      return;
+    }
+
+    if (active.captured && event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    if (!active.captured) {
+      swipeState.current = null;
+      return;
+    }
+
+    const decision = active.allowSwipe
+      ? classifySwipeDecision({
+          dx: event.clientX - active.startX,
+          dy: event.clientY - active.startY,
+          cardWidth: cardRef.current?.getBoundingClientRect().width ?? 320,
+          startClientX: active.startX,
+          viewportWidth: active.viewportWidth
+        })
+      : null;
+
+    resetSwipe();
+
+    if (decision === "pass") {
+      void onPass();
+      return;
+    }
+    if (decision === "delay") {
+      void onDelay();
+    }
+  };
+
+  return (
+    <section
+      className={`card step-card swipe-card ${preview !== "idle" ? `preview-${preview}` : ""}`}
+      style={swipeVisualStyle}
+    >
+      {canSwipe ? (
+        <div className="swipe-lane" aria-hidden="true">
+          <span className="swipe-lane-label pass">Pass</span>
+          <span className="swipe-lane-label delay">Delay</span>
+        </div>
+      ) : null}
+
+      <div className="swipe-card-panel">
+        <div
+          ref={cardRef}
+          className={`swipe-card-body ${dragging ? "dragging" : ""}`}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerEnd}
+          onPointerCancel={handlePointerEnd}
+          style={canSwipe ? { transform: `translateX(${dragX}px)` } : undefined}
+        >
+          <div className="step-title-row">
+            <div className="step-kicker">Step {stepIndex + 1} of {totalSteps}</div>
+            {currentResponse?.inProgress ? <span className="pill queue">Delayed</span> : null}
+          </div>
+          <div className="step-subcategory">{step.category ?? "General"}</div>
+          <h2 className="step-prompt">{step.prompt}</h2>
+
+          {showCoachmark ? (
+            <div className="swipe-coachmark" role="note">
+              <div>Swipe right to pass, left to delay. Buttons still work.</div>
+              <button
+                className="button secondary small"
+                type="button"
+                onClick={onDismissCoachmark}
+                onPointerDown={(event) => event.stopPropagation()}
+                onPointerUp={(event) => event.stopPropagation()}
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
+
+          {children}
+        </div>
+
+        <div className="decision-grid">
+          <button
+            className={`decision-btn pass ${currentResponse?.passed ? "active" : ""}`}
+            type="button"
+            onClick={() => void onPass()}
+            disabled={isLocked || !canPass}
+          >
+            Pass
+          </button>
+          <button
+            className={`decision-btn action ${currentResponse?.inProgress ? "active" : ""}`}
+            type="button"
+            onClick={() => void onDelay()}
+            disabled={isLocked}
+          >
+            Delay
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function DelayedItemsDrawer({
+  cards,
+  open,
+  onToggle,
+  onMarkActionCardFixed,
+  containerRef
+}: DelayedItemsDrawerProps): React.JSX.Element | null {
+  if (cards.length === 0) {
+    return null;
+  }
+
+  return (
+    <section ref={containerRef} className={`card delayed-drawer ${open ? "open" : ""}`}>
+      <button
+        className="delayed-drawer-toggle"
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls="delayed-items-panel"
+      >
+        <span className="delayed-drawer-copy">
+          <span className="step-kicker">Delayed items</span>
+          <span className="label">Handed off to someone else while you keep moving the checklist.</span>
+        </span>
+        <span className="delayed-drawer-meta">
+          <span className="pill queue">{cards.length} OPEN</span>
+          <span className="drawer-caret">{open ? "Hide" : "Show"}</span>
+        </span>
+      </button>
+
+      {open ? (
+        <div id="delayed-items-panel" className="action-list">
+          {cards.map((card) => {
+            const cardStep = getStepById(card.stepId);
+            return (
+              <article key={card.id} className="action-item">
+                <div className="action-item-top">
+                  <div className="step-subcategory">{cardStep?.category ?? "General"}</div>
+                  <div className="label">{formatCardAge(card.createdAtIso)}</div>
+                </div>
+                <div className="action-step">{card.stepPrompt}</div>
+                <div className="action-note">Tap pass when the fix comes back complete.</div>
+                <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                  <button className="button small" type="button" onClick={() => void onMarkActionCardFixed(card.id)}>
+                    Mark Pass
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ReadyFooter({
+  canFinalize,
+  counts,
+  isLocked,
+  message,
+  openActionCardCount,
+  onMarkReady
+}: ReadyFooterProps): React.JSX.Element {
+  return (
+    <section className="card ready-footer">
+      <div className="ready-footer-bar">
+        <div className="ready-footer-copy">
+          <div className="step-kicker">Ready check</div>
+          <div className="ready-footer-title">{readyFooterSummary(counts, isLocked, openActionCardCount)}</div>
+          <div className="label">{readyFooterStatusText(canFinalize, counts, isLocked, openActionCardCount)}</div>
+        </div>
+        <div className="ready-footer-actions">
+          <button className="button" type="button" disabled={!canFinalize || isLocked} onClick={() => void onMarkReady()}>
+            {isLocked ? "Match Ready" : "Mark Match Ready"}
+          </button>
+        </div>
+      </div>
+      {message ? (
+        <div className="inline-msg ok ready-footer-message" aria-live="polite">
+          {message}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export default function PreflightPage(): React.JSX.Element {
   const params = useParams<{ matchKey: string }>();
   const rawMatchKey = params.matchKey;
@@ -371,22 +1041,37 @@ export default function PreflightPage(): React.JSX.Element {
   const [stepIndex, setStepIndex] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
   const [undoState, setUndoState] = useState<UndoState | null>(null);
+  const [initialized, setInitialized] = useState(false);
+  const [delayedOpen, setDelayedOpen] = useState(false);
+  const [swipeCoachmarkDismissed, setSwipeCoachmarkDismissed] = useState<boolean | null>(null);
+  const delayedDrawerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     const load = async (): Promise<void> => {
+      setInitialized(false);
+      setMessage(null);
+
       const appSettings = await getSettings();
+      if (cancelled) {
+        return;
+      }
       setSettings(appSettings);
 
       if (!appSettings.eventKey) {
         setMatchContext(null);
         setRun(null);
         setUndoState(null);
+        setInitialized(true);
         return;
       }
 
       const snapshot = await getMatchesSnapshot(appSettings.eventKey, appSettings.teamNumber);
-      const snapshotMatch = snapshot?.matches.find((item) => item.matchKey === matchKey) ?? null;
-      setMatchContext(snapshotMatch);
+      if (!cancelled) {
+        const snapshotMatch = snapshot?.matches.find((item) => item.matchKey === matchKey) ?? null;
+        setMatchContext(snapshotMatch);
+      }
 
       const modeParam = appSettings.dataMode === "mock" ? "&mode=mock" : "";
       fetch(
@@ -400,6 +1085,9 @@ export default function PreflightPage(): React.JSX.Element {
           return (await res.json()) as MatchesPayload;
         })
         .then(async (payload) => {
+          if (cancelled) {
+            return;
+          }
           const currentMatch = payload.matches.find((item) => item.matchKey === matchKey) ?? null;
           setMatchContext(currentMatch);
           await saveMatchesSnapshot(appSettings.eventKey, appSettings.teamNumber, payload);
@@ -409,14 +1097,22 @@ export default function PreflightPage(): React.JSX.Element {
         });
 
       const existing = await getRun(appSettings.eventKey, matchKey);
+      if (cancelled) {
+        return;
+      }
+
       if (existing) {
         const migrated = migrateLegacyFailedSteps(existing);
         if (migrated.migrated) {
           await saveRun(migrated.run);
         }
+        if (cancelled) {
+          return;
+        }
         setRun(migrated.run);
         setUndoState(null);
         setStepIndex(firstIncompleteIndex(migrated.run));
+        setInitialized(true);
         return;
       }
 
@@ -430,13 +1126,33 @@ export default function PreflightPage(): React.JSX.Element {
         actionCards: []
       };
       await saveRun(fresh);
+      if (cancelled) {
+        return;
+      }
       setRun(fresh);
       setUndoState(null);
       setStepIndex(0);
+      setInitialized(true);
     };
 
     void load();
+
+    return () => {
+      cancelled = true;
+    };
   }, [matchKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      setSwipeCoachmarkDismissed(localStorage.getItem(SWIPE_COACHMARK_STORAGE_KEY) === "1");
+    } catch {
+      setSwipeCoachmarkDismissed(false);
+    }
+  }, []);
 
   const step = PRE_FLIGHT_9470_STEPS[stepIndex];
   const currentResponse = run && step ? getResponse(run, step.id) : undefined;
@@ -452,18 +1168,13 @@ export default function PreflightPage(): React.JSX.Element {
     [run]
   );
 
+  useEffect(() => {
+    if (openActionCards.length === 0) {
+      setDelayedOpen(false);
+    }
+  }, [openActionCards.length]);
+
   const progressPercent = Math.round((traversedSteps / PRE_FLIGHT_9470_STEPS.length) * 100);
-  const doneCount = counts.passed + counts.overridden;
-  const cameraStep = isCameraCountStep(step);
-  const batteryStep = isBatteryVoltageStep(step);
-  const measuredNumberValue =
-    step.kind === "number"
-      ? (typeof currentResponse?.valueNumber === "number" ? currentResponse.valueNumber : 12.8)
-      : null;
-  const measuredCountValue =
-    step.kind === "counter"
-      ? (typeof currentResponse?.valueCount === "number" ? currentResponse.valueCount : 0)
-      : null;
 
   const persistRun = async (nextRun: PreflightRun): Promise<void> => {
     setRun(nextRun);
@@ -661,13 +1372,14 @@ export default function PreflightPage(): React.JSX.Element {
     });
   };
 
-  const allComplete = PRE_FLIGHT_9470_STEPS.every((item) => isResponseComplete(getResponse(run, item.id)));
-  const canFinalize = allComplete && openActionCards.length === 0;
-  const matchTitle = matchContext ? `${matchContext.compLevel.toUpperCase()} ${matchContext.matchNumber} Preflight` : "Preflight";
-  const matchSubtitle = matchContext ? queueCountdown(matchContext.queueTimeIso) : settings?.eventKey ?? matchKey;
-
   const markReady = async (): Promise<void> => {
-    if (!run || !canFinalize || isLocked) {
+    if (!run || isLocked) {
+      return;
+    }
+
+    const allComplete = PRE_FLIGHT_9470_STEPS.every((item) => isResponseComplete(getResponse(run, item.id)));
+    const canFinalize = allComplete && openActionCards.length === 0;
+    if (!canFinalize) {
       return;
     }
 
@@ -698,7 +1410,36 @@ export default function PreflightPage(): React.JSX.Element {
     setUndoState(null);
   };
 
-  if (!settings?.eventKey) {
+  const dismissSwipeCoachmark = (): void => {
+    setSwipeCoachmarkDismissed(true);
+    try {
+      localStorage.setItem(SWIPE_COACHMARK_STORAGE_KEY, "1");
+    } catch {
+      // localStorage is a best-effort preference cache only.
+    }
+  };
+
+  const toggleDelayedDrawer = (): void => {
+    if (openActionCards.length === 0) {
+      return;
+    }
+
+    setDelayedOpen((current) => {
+      const next = !current;
+      if (next) {
+        window.setTimeout(() => {
+          delayedDrawerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }, 0);
+      }
+      return next;
+    });
+  };
+
+  if (!initialized || !settings) {
+    return <div className="card">Loading preflight run...</div>;
+  }
+
+  if (!settings.eventKey) {
     return <div className="card">Set event key in Settings before running preflight.</div>;
   }
 
@@ -706,262 +1447,82 @@ export default function PreflightPage(): React.JSX.Element {
     return <div className="card">Loading preflight run...</div>;
   }
 
+  const allComplete = PRE_FLIGHT_9470_STEPS.every((item) => isResponseComplete(getResponse(run, item.id)));
+  const canFinalize = allComplete && openActionCards.length === 0;
+  const matchTitle = matchContext ? `${matchContext.compLevel.toUpperCase()} ${matchContext.matchNumber} Preflight` : "Preflight";
+  const matchSubtitle = matchContext ? queueCountdown(matchContext.queueTimeIso) : settings.eventKey;
+  const showCoachmark =
+    swipeCoachmarkDismissed === false && step.kind === "boolean" && step.id === FIRST_BOOLEAN_STEP_ID;
+
   return (
     <div className="preflight-shell">
-      <section className="card preflight-overview">
-        <div className="preflight-head">
-          <div>
-            <div className="ready-board-kicker">{matchSubtitle}</div>
-            <h1>{matchTitle}</h1>
-            <div className="ready-board-inline">
-              <span className={`pill ${runStatusClass(run, openActionCards.length)}`}>{runStatusLabel(run, openActionCards.length)}</span>
-              {matchContext ? (
-                <span className={`pill ${matchStatusClass(matchContext.status)}`}>{matchContext.status.replaceAll("_", " ")}</span>
-              ) : null}
-            </div>
-          </div>
-        </div>
+      <PreflightHeader
+        matchContext={matchContext}
+        matchKey={matchKey}
+        matchSubtitle={matchSubtitle}
+        matchTitle={matchTitle}
+        progressPercent={progressPercent}
+        run={run}
+        stepIndex={stepIndex}
+        counts={counts}
+        delayedCount={openActionCards.length}
+        delayedOpen={delayedOpen}
+        fallbackLabel={`${settings.eventKey} • ${matchKey}`}
+        onToggleDelayed={toggleDelayedDrawer}
+      />
 
-        {matchContext ? (
-          <>
-            <div className="preflight-context-grid">
-              <div className="preflight-context-block">
-                <div className="label">Queue</div>
-                <div className="value">{formatTime(matchContext.queueTimeIso)}</div>
-              </div>
-              <div className="preflight-context-block">
-                <div className="label">Field</div>
-                <div className="value">{formatTime(matchContext.expectedStartTimeIso)}</div>
-              </div>
-            </div>
-            <div className="team-rows">
-              <div className="team-row">
-                <span className="team-side">ALLY</span>
-                <span className={`team-values alliance ${matchContext.allianceColor}`}>{matchContext.allianceTeams.join(" • ")}</span>
-              </div>
-              <div className="team-row">
-                <span className="team-side">OPP</span>
-                <span className={`team-values alliance ${matchContext.allianceColor === "red" ? "blue" : matchContext.allianceColor === "blue" ? "red" : "unknown"}`}>
-                  {matchContext.opponentTeams.join(" • ")}
-                </span>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="label">
-            {settings.eventKey} • {matchKey}
-          </div>
-        )}
+      <SwipeDecisionCard
+        step={step}
+        stepIndex={stepIndex}
+        totalSteps={PRE_FLIGHT_9470_STEPS.length}
+        currentResponse={currentResponse}
+        canPass={canPassCurrentStep(step, currentResponse)}
+        isLocked={isLocked}
+        showCoachmark={showCoachmark}
+        onDismissCoachmark={dismissSwipeCoachmark}
+        onPass={() => setDecision(true)}
+        onDelay={delayStep}
+      >
+        <MeasurementPanel
+          step={step}
+          currentResponse={currentResponse}
+          isLocked={isLocked}
+          onSetNumberLike={setNumberLike}
+        />
+      </SwipeDecisionCard>
 
-        <div className="progress-block">
-          <div className="progress-meta compact">
-            <span className="value progress-percent">{progressPercent}%</span>
-            <span className="label">Step {stepIndex + 1} / {PRE_FLIGHT_9470_STEPS.length}</span>
-            <span className="label">{doneCount} pass</span>
-            {counts.inProgress > 0 ? <span className="label">{counts.inProgress} delayed</span> : null}
-            {counts.unanswered > 0 ? <span className="label">{counts.unanswered} left</span> : null}
-          </div>
-          <div className="progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent}>
-            <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
-          </div>
-        </div>
-
-        {openActionCards.length > 0 ? (
-          <div className="inline-msg">
-            Delayed items stay below so the checklist can keep moving. Resolve them before marking the match ready.
-          </div>
-        ) : null}
-      </section>
-
-      <section className="card step-card">
-        <div className="step-title-row">
-          <div className="step-kicker">Step {stepIndex + 1} of {PRE_FLIGHT_9470_STEPS.length}</div>
-          {currentResponse?.inProgress ? <span className="pill queue">Delayed</span> : null}
-        </div>
-        <div className="step-subcategory">{step.category ?? "General"}</div>
-        <h2 className="step-prompt">{step.prompt}</h2>
-
-        {step.kind !== "boolean" ? (
-          <div className="measurement-panel">
-            {batteryStep ? (
-              <>
-                <div className="measurement-header">
-                  <span className="label">Battery voltage</span>
-                  <span className="value meter-value">{measuredNumberValue?.toFixed(2)}V</span>
-                </div>
-                <input
-                  className="battery-range"
-                  type="range"
-                  min={11}
-                  max={14}
-                  step={0.05}
-                  value={measuredNumberValue ?? 12.8}
-                  onChange={(event) => {
-                    const numeric = Number(event.target.value);
-                    if (Number.isFinite(numeric)) {
-                      void setNumberLike(numeric);
-                    }
-                  }}
-                  disabled={isLocked}
-                />
-                <div className="preset-row">
-                  {[11.5, 12.0, 12.5, 13.0, 13.3].map((preset) => (
-                    <button
-                      key={`volt-${preset}`}
-                      className="button secondary small"
-                      type="button"
-                      onClick={() => void setNumberLike(preset)}
-                      disabled={isLocked}
-                    >
-                      {preset.toFixed(1)}V
-                    </button>
-                  ))}
-                </div>
-              </>
-            ) : cameraStep ? (
-              <>
-                <div className="measurement-header">
-                  <span className="label">Camera count</span>
-                  <span className="value meter-value">{measuredCountValue ?? 0}</span>
-                </div>
-                <div className="camera-grid">
-                  {[0, 1, 2, 3, 4, 5].map((count) => (
-                    <button
-                      key={`camera-${count}`}
-                      className={`camera-btn ${(measuredCountValue ?? 0) === count ? "active" : ""}`}
-                      type="button"
-                      onClick={() => void setNumberLike(count)}
-                      disabled={isLocked}
-                    >
-                      {count}
-                    </button>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="measurement-header">
-                  <span className="label">Measured count</span>
-                  <span className="value meter-value">{measuredCountValue ?? 0}</span>
-                </div>
-                <div className="counter-stepper">
-                  <button
-                    className="button secondary small"
-                    type="button"
-                    onClick={() => void setNumberLike(Math.max(0, (measuredCountValue ?? 0) - 1))}
-                    disabled={isLocked}
-                  >
-                    -1
-                  </button>
-                  <button
-                    className="button secondary small"
-                    type="button"
-                    onClick={() => void setNumberLike((measuredCountValue ?? 0) + 1)}
-                    disabled={isLocked}
-                  >
-                    +1
-                  </button>
-                  {step.min !== undefined ? (
-                    <button
-                      className="button secondary small"
-                      type="button"
-                      onClick={() => void setNumberLike(step.min ?? 0)}
-                      disabled={isLocked}
-                    >
-                      Set {step.min}
-                    </button>
-                  ) : null}
-                </div>
-              </>
-            )}
-            <div className="label">{requirementText(step)}</div>
-          </div>
-        ) : null}
-
-        <div className="decision-grid">
-          <button
-            className={`decision-btn pass ${currentResponse?.passed ? "active" : ""}`}
-            type="button"
-            onClick={() => void setDecision(true)}
-            disabled={isLocked}
-          >
-            Pass
-          </button>
-          <button
-            className={`decision-btn action ${currentResponse?.inProgress ? "active" : ""}`}
-            type="button"
-            onClick={() => void delayStep()}
-            disabled={isLocked}
-          >
-            Delay
-          </button>
-        </div>
-
-        <div className="step-nav">
-          <button
-            className="button secondary"
-            type="button"
-            onClick={() => setStepIndex((prev) => Math.max(0, prev - 1))}
-            disabled={stepIndex === 0 || isLocked}
-          >
-            Previous Step
-          </button>
-          {undoState ? (
-            <button className="button secondary" type="button" onClick={() => void undoLastAction()}>
-              Undo Last Action
-            </button>
-          ) : null}
-        </div>
-      </section>
-
-      {openActionCards.length > 0 ? (
-        <section className="card action-queue">
-          <div className="row" style={{ justifyContent: "space-between" }}>
-            <div className="col" style={{ gap: 2 }}>
-              <h3>Delayed Items</h3>
-              <div className="label">Handed off to someone else while you keep advancing the checklist.</div>
-            </div>
-            <span className="pill queue">{openActionCards.length} OPEN</span>
-          </div>
-          <div className="action-list">
-            {openActionCards.map((card) => {
-              const cardStep = getStepById(card.stepId);
-              return (
-                <article key={card.id} className="action-item">
-                  <div className="action-item-top">
-                    <div className="step-subcategory">{cardStep?.category ?? "General"}</div>
-                    <div className="label">{formatCardAge(card.createdAtIso)}</div>
-                  </div>
-                  <div className="action-step">{card.stepPrompt}</div>
-                  <div className="action-note">Tap pass when the fix comes back complete.</div>
-                  <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
-                    <button className="button small" type="button" onClick={() => void markActionCardFixed(card.id)}>
-                      Mark Pass
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
-
-      <section className="card col">
-        <h2>Finalize</h2>
-        <div className="label">
-          You can mark ready only when every step passes and delayed cards are resolved.
-        </div>
-        {openActionCards.length > 0 ? (
-          <div className="inline-msg warn">Resolve {openActionCards.length} delayed card(s) before finalizing.</div>
-        ) : null}
-        {counts.unanswered > 0 ? (
-          <div className="inline-msg warn">{counts.unanswered} checklist step(s) still unanswered.</div>
-        ) : null}
-        <button className="button" type="button" disabled={!canFinalize || isLocked} onClick={() => void markReady()}>
-          Mark Match Ready
+      <div className="step-nav-inline">
+        <button
+          className="button secondary"
+          type="button"
+          onClick={() => setStepIndex((prev) => Math.max(0, prev - 1))}
+          disabled={stepIndex === 0 || isLocked}
+        >
+          Previous Step
         </button>
-        {message ? <div className="inline-msg ok">{message}</div> : null}
-      </section>
+        {undoState ? (
+          <button className="button secondary" type="button" onClick={() => void undoLastAction()}>
+            Undo Last Action
+          </button>
+        ) : null}
+      </div>
+
+      <DelayedItemsDrawer
+        cards={openActionCards}
+        open={delayedOpen}
+        onToggle={toggleDelayedDrawer}
+        onMarkActionCardFixed={markActionCardFixed}
+        containerRef={delayedDrawerRef}
+      />
+
+      <ReadyFooter
+        canFinalize={canFinalize}
+        counts={counts}
+        isLocked={isLocked}
+        message={message}
+        openActionCardCount={openActionCards.length}
+        onMarkReady={markReady}
+      />
     </div>
   );
 }
