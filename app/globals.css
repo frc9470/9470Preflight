@@ -1004,6 +1004,10 @@ textarea {
   opacity: var(--delay-reveal);
 }
 
+.swipe-lane.pass-only::after {
+  display: none;
+}
+
 .swipe-lane-label {
   position: absolute;
   top: 50%;
@@ -1300,70 +1304,43 @@ textarea {
   min-width: 0;
 }
 
-.delayed-drawer {
+.delayed-stack {
   display: grid;
   gap: 10px;
 }
 
-.delayed-drawer-toggle {
+.delayed-stack-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  cursor: pointer;
-  text-align: left;
-}
-
-.delayed-drawer-copy {
-  display: grid;
-  gap: 4px;
-}
-
-.delayed-drawer-meta {
-  display: flex;
-  align-items: center;
   gap: 10px;
 }
 
-.drawer-caret {
-  color: var(--muted);
+.delayed-stack-list {
+  display: grid;
+  gap: 10px;
+}
+
+.delayed-step-card .swipe-card-panel {
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.delayed-step-card .step-title-row {
+  align-items: baseline;
+}
+
+.delayed-step-card .step-kicker {
+  color: #8c6327;
+}
+
+.delayed-step-prompt {
+  font-size: clamp(1.34rem, 4.5vw, 1.8rem);
+}
+
+.delayed-step-requirement {
+  color: #5a6672;
   font-size: 0.9rem;
-  font-weight: 700;
-}
-
-.action-list {
-  display: grid;
-  gap: 8px;
-}
-
-.action-item {
-  border: 1px solid #ebd6bc;
-  border-radius: 12px;
-  padding: 12px;
-  background: #fffbf5;
-  display: grid;
-  gap: 8px;
-}
-
-.action-item-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-}
-
-.action-step {
-  font-size: 0.98rem;
-  font-weight: 600;
-}
-
-.action-note {
-  font-size: 0.92rem;
-  color: #353b43;
 }
 
 .ready-footer {

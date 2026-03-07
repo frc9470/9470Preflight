@@ -83,12 +83,24 @@ type SwipeDecisionCardProps = {
   children?: ReactNode;
 };
 
-type DelayedItemsDrawerProps = {
+type DelayedStackProps = {
   cards: PreflightActionCard[];
-  open: boolean;
-  onToggle: () => void;
+  isLocked: boolean;
+  currentStepId: string;
   onMarkActionCardFixed: (cardId: string) => void | Promise<void>;
-  containerRef: React.RefObject<HTMLElement>;
+};
+
+type SwipeShellProps = {
+  canSwipe: boolean;
+  allowDelay?: boolean;
+  passLabel?: string;
+  delayLabel?: string;
+  resetKey: string;
+  onPass: () => void | Promise<void>;
+  onDelay?: () => void | Promise<void>;
+  footer?: ReactNode;
+  className?: string;
+  children: ReactNode;
 };
 
 type ReadyFooterProps = {
@@ -109,6 +121,14 @@ type SwipeTrackingState = {
   startX: number;
   startY: number;
   viewportWidth: number;
+};
+
+type SwipeGestureOptions = {
+  canSwipe: boolean;
+  allowDelay?: boolean;
+  onPass: () => void | Promise<void>;
+  onDelay?: () => void | Promise<void>;
+  resetKey: string;
 };
 
 function getResponse(run: PreflightRun | null, stepId: string): StepResponse | undefined {
@@ -319,22 +339,26 @@ function opposingAllianceColor(color: MatchCard["allianceColor"]): "red" | "blue
   return "unknown";
 }
 
-function isBatteryVoltageStep(step: ChecklistStep): boolean {
+function isBatteryBeakStep(step: ChecklistStep): boolean {
   return step.id === "cold-15";
 }
 
+function isPdhVoltageStep(step: ChecklistStep): boolean {
+  return step.id === "hot-7";
+}
+
 function isCameraCountStep(step: ChecklistStep): boolean {
-  return step.id === "cold-6" || step.id === "hot-2";
+  return step.id === "hot-2";
 }
 
 function requirementText(step: ChecklistStep): string {
   if (step.kind === "number") {
-    return `Requirement: value > ${Number(step.min ?? 0).toFixed(1)}V`;
+    if (isBatteryBeakStep(step)) {
+      return `Requirement: value >= ${Math.round(step.min ?? 0)}% on Battery Beak`;
+    }
+    return `Requirement: value >= ${Number(step.min ?? 0).toFixed(1)}V`;
   }
   if (step.kind === "counter") {
-    if (step.id === "cold-6") {
-      return "Requirement: camera count > 2";
-    }
     return `Requirement: count >= ${step.min ?? 0}`;
   }
   return "";
@@ -347,6 +371,7 @@ function buildDecisionDraft(
   openCard?: PreflightActionCard
 ): StepResponse {
   const min = step.min ?? 0;
+  const numberStepDelta = min >= 20 ? 1 : 0.1;
 
   if (step.kind === "boolean") {
     return {
@@ -370,8 +395,8 @@ function buildDecisionDraft(
       ? existing.valueNumber
       : undefined;
 
-    const passingValue = entered !== undefined && entered > min ? entered : min + 0.1;
-    const failingValue = entered !== undefined && entered <= min ? entered : Math.max(0, min - 0.1);
+    const passingValue = entered !== undefined && entered >= min ? entered : min;
+    const failingValue = entered !== undefined && entered < min ? entered : Math.max(0, min - numberStepDelta);
 
     return {
       stepId: step.id,
@@ -534,12 +559,13 @@ function MeasurementPanel({
     return null;
   }
 
-  const batteryStep = isBatteryVoltageStep(step);
+  const batteryBeakStep = isBatteryBeakStep(step);
+  const pdhVoltageStep = isPdhVoltageStep(step);
   const cameraStep = isCameraCountStep(step);
   const measuredNumberValue =
     step.kind === "number" && typeof currentResponse?.valueNumber === "number"
       ? currentResponse.valueNumber
-      : 12.8;
+      : batteryBeakStep ? 130 : 13.0;
   const measuredCountValue =
     step.kind === "counter" && typeof currentResponse?.valueCount === "number"
       ? currentResponse.valueCount
@@ -551,13 +577,58 @@ function MeasurementPanel({
       ? Array.from({ length: target }, (_, index) => index < measuredCountValue)
       : [];
 
-  if (batteryStep) {
+  if (batteryBeakStep) {
     return (
       <div className="measurement-panel battery-panel">
         <div className="measurement-header">
-          <span className="label">Battery voltage</span>
+          <span className="label">Battery Beak</span>
           <span className={`measurement-status ${passing ? "met" : ""}`}>
-            {passing ? "Requirement met" : `Pass above ${Number(step.min ?? 0).toFixed(1)}V`}
+            {passing ? "Requirement met" : `Need ${Math.round(step.min ?? 0)}%+`}
+          </span>
+        </div>
+        <div className="measurement-hero">
+          <span className="measurement-hero-value">{Math.round(measuredNumberValue)}%</span>
+        </div>
+        <input
+          className="battery-range"
+          type="range"
+          min={115}
+          max={140}
+          step={1}
+          value={Math.round(measuredNumberValue)}
+          onChange={(event) => {
+            const numeric = Number(event.target.value);
+            if (Number.isFinite(numeric)) {
+              void onSetNumberLike(numeric);
+            }
+          }}
+          disabled={isLocked}
+        />
+        <div className="preset-row">
+          {[120, 125, 130, 135, 140].map((preset) => (
+            <button
+              key={`beak-${preset}`}
+              className={`measure-chip ${Math.round(measuredNumberValue) === preset ? "active" : ""}`}
+              type="button"
+              onClick={() => void onSetNumberLike(preset)}
+              disabled={isLocked}
+            >
+              {preset}%
+            </button>
+          ))}
+        </div>
+        <div className="measurement-hint">{requirementText(step)}. Set a passing value, then tap Pass.</div>
+      </div>
+    );
+  }
+
+  if (pdhVoltageStep) {
+    return (
+      <div className="measurement-panel battery-panel">
+        <div className="measurement-header">
+          <span className="label">PDH voltage</span>
+          <span className={`measurement-status ${passing ? "met" : ""}`}>
+            {passing ? "Requirement met" : `Need ${Number(step.min ?? 0).toFixed(1)}V+`}
           </span>
         </div>
         <div className="measurement-hero">
@@ -579,7 +650,7 @@ function MeasurementPanel({
           disabled={isLocked}
         />
         <div className="preset-row">
-          {[12.0, 12.5, 13.0, 13.3, 13.5].map((preset) => (
+          {[12.0, 12.5, 13.0, 13.2, 13.5].map((preset) => (
             <button
               key={`volt-${preset}`}
               className={`measure-chip ${measuredNumberValue === preset ? "active" : ""}`}
@@ -679,27 +750,30 @@ function MeasurementPanel({
   );
 }
 
-function SwipeDecisionCard({
-  step,
-  stepIndex,
-  totalSteps,
-  currentResponse,
-  canPass,
-  isLocked,
-  showCoachmark,
-  onDismissCoachmark,
+function useSwipeCardGesture({
+  canSwipe,
+  allowDelay = true,
   onPass,
   onDelay,
-  children
-}: SwipeDecisionCardProps): React.JSX.Element {
-  const canSwipe = step.kind === "boolean" && !isLocked;
+  resetKey
+}: SwipeGestureOptions): {
+  cardRef: React.RefObject<HTMLDivElement>;
+  dragging: boolean;
+  preview: SwipePreview;
+  swipeVisualStyle: CSSProperties | undefined;
+  transformStyle: CSSProperties | undefined;
+  onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerUp: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerCancel: (event: ReactPointerEvent<HTMLDivElement>) => void;
+} {
   const cardRef = useRef<HTMLDivElement>(null);
   const swipeState = useRef<SwipeTrackingState | null>(null);
   const [dragX, setDragX] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [preview, setPreview] = useState<SwipePreview>("idle");
   const passReveal = dragX > 0 ? Math.min(1, Math.abs(dragX) / 112) : 0;
-  const delayReveal = dragX < 0 ? Math.min(1, Math.abs(dragX) / 112) : 0;
+  const delayReveal = allowDelay && dragX < 0 ? Math.min(1, Math.abs(dragX) / 112) : 0;
   const swipeVisualStyle = canSwipe
     ? ({
         "--pass-reveal": passReveal.toString(),
@@ -716,9 +790,9 @@ function SwipeDecisionCard({
 
   useEffect(() => {
     resetSwipe();
-  }, [step.id, isLocked]);
+  }, [resetKey, canSwipe]);
 
-  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
     if (!canSwipe || !event.isPrimary) {
       return;
     }
@@ -735,7 +809,7 @@ function SwipeDecisionCard({
     };
   };
 
-  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
     const active = swipeState.current;
     if (!active || active.pointerId !== event.pointerId || !active.allowSwipe) {
       return;
@@ -768,10 +842,10 @@ function SwipeDecisionCard({
 
     setDragging(true);
     setDragX(nextDrag);
-    setPreview(nextDrag > 16 ? "pass" : nextDrag < -16 ? "delay" : "idle");
+    setPreview(nextDrag > 16 ? "pass" : allowDelay && nextDrag < -16 ? "delay" : "idle");
   };
 
-  const handlePointerEnd = (event: ReactPointerEvent<HTMLDivElement>): void => {
+  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>): void => {
     const active = swipeState.current;
     if (!active || active.pointerId !== event.pointerId) {
       return;
@@ -802,60 +876,87 @@ function SwipeDecisionCard({
       void onPass();
       return;
     }
-    if (decision === "delay") {
+    if (decision === "delay" && allowDelay && onDelay) {
       void onDelay();
     }
   };
 
+  return {
+    cardRef,
+    dragging,
+    preview,
+    swipeVisualStyle,
+    transformStyle: canSwipe ? { transform: `translateX(${dragX}px)` } : undefined,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel: onPointerUp
+  };
+}
+
+function SwipeShellCard({
+  canSwipe,
+  allowDelay = true,
+  passLabel = "Pass",
+  delayLabel = "Delay",
+  resetKey,
+  onPass,
+  onDelay,
+  footer,
+  className,
+  children
+}: SwipeShellProps): React.JSX.Element {
+  const swipe = useSwipeCardGesture({ canSwipe, allowDelay, onPass, onDelay, resetKey });
+
   return (
     <section
-      className={`card step-card swipe-card ${preview !== "idle" ? `preview-${preview}` : ""}`}
-      style={swipeVisualStyle}
+      className={`card step-card swipe-card ${swipe.preview !== "idle" ? `preview-${swipe.preview}` : ""}${className ? ` ${className}` : ""}`}
+      style={swipe.swipeVisualStyle}
     >
       {canSwipe ? (
-        <div className="swipe-lane" aria-hidden="true">
-          <span className="swipe-lane-label pass">Pass</span>
-          <span className="swipe-lane-label delay">Delay</span>
+        <div className={`swipe-lane ${allowDelay ? "" : "pass-only"}`.trim()} aria-hidden="true">
+          <span className="swipe-lane-label pass">{passLabel}</span>
+          {allowDelay ? <span className="swipe-lane-label delay">{delayLabel}</span> : null}
         </div>
       ) : null}
 
       <div
-        ref={cardRef}
-        className={`swipe-card-panel ${dragging ? "dragging" : ""}`}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerEnd}
-        onPointerCancel={handlePointerEnd}
-        style={canSwipe ? { transform: `translateX(${dragX}px)` } : undefined}
+        ref={swipe.cardRef}
+        className={`swipe-card-panel ${swipe.dragging ? "dragging" : ""}`}
+        onPointerDown={swipe.onPointerDown}
+        onPointerMove={swipe.onPointerMove}
+        onPointerUp={swipe.onPointerUp}
+        onPointerCancel={swipe.onPointerCancel}
+        style={swipe.transformStyle}
       >
-        <div
-          className="swipe-card-body"
-        >
-          <div className="step-title-row">
-            <div className="step-kicker">Step {stepIndex + 1} of {totalSteps}</div>
-            {currentResponse?.inProgress ? <span className="pill queue">Delayed</span> : null}
-          </div>
-          <div className="step-subcategory">{step.category ?? "General"}</div>
-          <h2 className="step-prompt">{step.prompt}</h2>
+        <div className="swipe-card-body">{children}</div>
+        {footer}
+      </div>
+    </section>
+  );
+}
 
-          {showCoachmark ? (
-            <div className="swipe-coachmark" role="note">
-              <div>Swipe right to pass, left to delay. Buttons still work.</div>
-              <button
-                className="button secondary small"
-                type="button"
-                onClick={onDismissCoachmark}
-                onPointerDown={(event) => event.stopPropagation()}
-                onPointerUp={(event) => event.stopPropagation()}
-              >
-                Dismiss
-              </button>
-            </div>
-          ) : null}
-
-          {children}
-        </div>
-
+function SwipeDecisionCard({
+  step,
+  stepIndex,
+  totalSteps,
+  currentResponse,
+  canPass,
+  isLocked,
+  showCoachmark,
+  onDismissCoachmark,
+  onPass,
+  onDelay,
+  children
+}: SwipeDecisionCardProps): React.JSX.Element {
+  return (
+    <SwipeShellCard
+      canSwipe={step.kind === "boolean" && !isLocked}
+      allowDelay
+      resetKey={`${step.id}:${isLocked}`}
+      onPass={onPass}
+      onDelay={onDelay}
+      footer={
         <div className="decision-grid">
           <button
             className={`decision-btn pass ${currentResponse?.passed ? "active" : ""}`}
@@ -874,63 +975,83 @@ function SwipeDecisionCard({
             Delay
           </button>
         </div>
+      }
+    >
+      <div className="step-title-row">
+        <div className="step-kicker">Step {stepIndex + 1} of {totalSteps}</div>
+        {currentResponse?.inProgress ? <span className="pill queue">Delayed</span> : null}
       </div>
-    </section>
+      <div className="step-subcategory">{step.category ?? "General"}</div>
+      <h2 className="step-prompt">{step.prompt}</h2>
+
+      {showCoachmark ? (
+        <div className="swipe-coachmark" role="note">
+          <div>Swipe right to pass, left to delay. Buttons still work.</div>
+          <button
+            className="button secondary small"
+            type="button"
+            onClick={onDismissCoachmark}
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
+      {children}
+    </SwipeShellCard>
   );
 }
 
-function DelayedItemsDrawer({
+function DelayedItemsStack({
   cards,
-  open,
-  onToggle,
+  isLocked,
+  currentStepId,
   onMarkActionCardFixed,
-  containerRef
-}: DelayedItemsDrawerProps): React.JSX.Element | null {
-  if (cards.length === 0) {
+}: DelayedStackProps): React.JSX.Element | null {
+  const visibleCards = cards.filter((card) => card.stepId !== currentStepId);
+
+  if (visibleCards.length === 0) {
     return null;
   }
 
   return (
-    <section ref={containerRef} className={`card delayed-drawer ${open ? "open" : ""}`}>
-      <button
-        className="delayed-drawer-toggle"
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        aria-controls="delayed-items-panel"
-      >
-        <span className="delayed-drawer-copy">
-          <span className="step-kicker">Delayed items</span>
-          <span className="label">Handed off to someone else while you keep moving the checklist.</span>
+    <section className="delayed-stack" aria-label="Delayed items">
+      <div className="delayed-stack-heading">
+        <span className="step-kicker">Delayed items</span>
+        <span className="label">
+          {visibleCards.length === 1 ? "1 waiting on a fix" : `${visibleCards.length} waiting on fixes`}
         </span>
-        <span className="delayed-drawer-meta">
-          <span className="pill queue">{cards.length} OPEN</span>
-          <span className="drawer-caret">{open ? "Hide" : "Show"}</span>
-        </span>
-      </button>
+      </div>
 
-      {open ? (
-        <div id="delayed-items-panel" className="action-list">
-          {cards.map((card) => {
-            const cardStep = getStepById(card.stepId);
-            return (
-              <article key={card.id} className="action-item">
-                <div className="action-item-top">
-                  <div className="step-subcategory">{cardStep?.category ?? "General"}</div>
-                  <div className="label">{formatCardAge(card.createdAtIso)}</div>
-                </div>
-                <div className="action-step">{card.stepPrompt}</div>
-                <div className="action-note">Tap pass when the fix comes back complete.</div>
-                <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
-                  <button className="button small" type="button" onClick={() => void onMarkActionCardFixed(card.id)}>
-                    Mark Pass
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      ) : null}
+      <div className="delayed-stack-list">
+        {visibleCards.map((card) => {
+          const step = getStepById(card.stepId);
+          if (!step) {
+            return null;
+          }
+
+          return (
+            <SwipeShellCard
+              key={card.id}
+              canSwipe={!isLocked}
+              allowDelay={false}
+              resetKey={`${card.id}:${card.status}:${isLocked}`}
+              onPass={() => onMarkActionCardFixed(card.id)}
+              className="delayed-step-card"
+            >
+              <div className="step-title-row">
+                <div className="step-kicker">Delayed item</div>
+                <div className="label">{formatCardAge(card.createdAtIso)}</div>
+              </div>
+              <div className="step-subcategory">{step.category ?? "General"}</div>
+              <h2 className="step-prompt delayed-step-prompt">{card.stepPrompt}</h2>
+              {step.kind !== "boolean" ? <div className="label delayed-step-requirement">{requirementText(step)}</div> : null}
+            </SwipeShellCard>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -978,9 +1099,7 @@ export default function PreflightPage(): React.JSX.Element {
   const [message, setMessage] = useState<string | null>(null);
   const [undoState, setUndoState] = useState<UndoState | null>(null);
   const [initialized, setInitialized] = useState(false);
-  const [delayedOpen, setDelayedOpen] = useState(false);
   const [swipeCoachmarkDismissed, setSwipeCoachmarkDismissed] = useState<boolean | null>(null);
-  const delayedDrawerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1093,7 +1212,10 @@ export default function PreflightPage(): React.JSX.Element {
   const step = PRE_FLIGHT_9470_STEPS[stepIndex];
   const currentResponse = run && step ? getResponse(run, step.id) : undefined;
   const openActionCards = useMemo(
-    () => (run?.actionCards ?? []).filter((card) => card.status === "OPEN"),
+    () =>
+      [...(run?.actionCards ?? [])]
+        .filter((card) => card.status === "OPEN")
+        .sort((left, right) => new Date(right.createdAtIso).getTime() - new Date(left.createdAtIso).getTime()),
     [run?.actionCards]
   );
   const counts = useMemo(() => statCounts(run?.responses ?? []), [run?.responses]);
@@ -1103,12 +1225,6 @@ export default function PreflightPage(): React.JSX.Element {
     () => PRE_FLIGHT_9470_STEPS.filter((item) => isResponseNavigable(getResponse(run, item.id))).length,
     [run]
   );
-
-  useEffect(() => {
-    if (openActionCards.length === 0) {
-      setDelayedOpen(false);
-    }
-  }, [openActionCards.length]);
 
   const progressPercent = Math.round((traversedSteps / PRE_FLIGHT_9470_STEPS.length) * 100);
 
@@ -1355,22 +1471,6 @@ export default function PreflightPage(): React.JSX.Element {
     }
   };
 
-  const toggleDelayedDrawer = (): void => {
-    if (openActionCards.length === 0) {
-      return;
-    }
-
-    setDelayedOpen((current) => {
-      const next = !current;
-      if (next) {
-        window.setTimeout(() => {
-          delayedDrawerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        }, 0);
-      }
-      return next;
-    });
-  };
-
   if (!initialized || !settings) {
     return <div className="card">Loading preflight run...</div>;
   }
@@ -1423,6 +1523,13 @@ export default function PreflightPage(): React.JSX.Element {
         />
       </SwipeDecisionCard>
 
+      <DelayedItemsStack
+        cards={openActionCards}
+        isLocked={isLocked}
+        currentStepId={step.id}
+        onMarkActionCardFixed={markActionCardFixed}
+      />
+
       <div className="step-nav-inline">
         <button
           className="button secondary small step-nav-button"
@@ -1438,14 +1545,6 @@ export default function PreflightPage(): React.JSX.Element {
           </button>
         ) : null}
       </div>
-
-      <DelayedItemsDrawer
-        cards={openActionCards}
-        open={delayedOpen}
-        onToggle={toggleDelayedDrawer}
-        onMarkActionCardFixed={markActionCardFixed}
-        containerRef={delayedDrawerRef}
-      />
 
       <ReadyFooter
         canFinalize={canFinalize}

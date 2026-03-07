@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 
+import { PRE_FLIGHT_STEP_COUNT } from "../src/checklist/preflight9470";
 import {
   buildRunSummaryMap,
   emptyRunSummary,
@@ -69,7 +70,14 @@ describe("run summary helpers", () => {
       [queueing],
       [upcoming],
       {
-        CAHAL_qm1: { ...emptyRunSummary("CAHAL_qm1"), hasRun: true, runState: "BLOCKED", passedCount: 10, openActionCards: 1, totalSteps: 38 },
+        CAHAL_qm1: {
+          ...emptyRunSummary("CAHAL_qm1"),
+          hasRun: true,
+          runState: "BLOCKED",
+          passedCount: 10,
+          openActionCards: 1,
+          totalSteps: PRE_FLIGHT_STEP_COUNT
+        },
         CAHAL_qm2: { ...emptyRunSummary("CAHAL_qm2"), hasRun: false }
       }
     );
@@ -85,7 +93,14 @@ describe("run summary helpers", () => {
       [readyQueueing],
       [pendingUpcoming],
       {
-        CAHAL_qm1: { ...emptyRunSummary("CAHAL_qm1"), hasRun: true, runState: "READY", passedCount: 38, openActionCards: 0, totalSteps: 38 },
+        CAHAL_qm1: {
+          ...emptyRunSummary("CAHAL_qm1"),
+          hasRun: true,
+          runState: "READY",
+          passedCount: PRE_FLIGHT_STEP_COUNT,
+          openActionCards: 0,
+          totalSteps: PRE_FLIGHT_STEP_COUNT
+        },
         CAHAL_qm2: { ...emptyRunSummary("CAHAL_qm2"), hasRun: false }
       }
     );
@@ -98,12 +113,12 @@ describe("run summary helpers", () => {
       ...emptyRunSummary("CAHAL_qm3"),
       hasRun: true,
       runState: "BLOCKED" as const,
-      passedCount: 22,
+      passedCount: 12,
       openActionCards: 2
     };
 
     expect(summaryStatusLabel(delayed)).toBe("2 delayed");
     expect(summaryStatusTone(delayed)).toBe("queue");
-    expect(summaryProgressLabel(delayed)).toBe("22/38 pass • 2 delayed");
+    expect(summaryProgressLabel(delayed)).toBe(`12/${PRE_FLIGHT_STEP_COUNT} pass • 2 delayed`);
   });
 });

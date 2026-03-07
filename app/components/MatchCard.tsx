@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { PRE_FLIGHT_STEP_COUNT } from "@/src/checklist/preflight9470";
 import { queueCountdown } from "@/src/matches/pitFlow";
 import type { MatchCard, PreflightRunState } from "@/src/types/domain";
 import {
@@ -115,7 +116,7 @@ export function MatchCardView(
       <div className="match-footer">
         <div className="match-footer-meta">
           <span className={`pill ${checklistPillClass}`}>Checklist {checklistText}</span>
-          <span className="label">{resolvedSummary ? summaryProgressLabel(resolvedSummary) : "0/38 pass"}</span>
+          <span className="label">{resolvedSummary ? summaryProgressLabel(resolvedSummary) : `0/${PRE_FLIGHT_STEP_COUNT} pass`}</span>
         </div>
         <span className="label">{checklistActionText}</span>
       </div>

@@ -41,7 +41,7 @@ export function isStepPassing(step: ChecklistStep, response: StepResponse): bool
     if (typeof response.valueNumber !== "number" || Number.isNaN(response.valueNumber)) {
       return false;
     }
-    return step.min !== undefined ? response.valueNumber > step.min : true;
+    return step.min !== undefined ? response.valueNumber >= step.min : true;
   }
 
   if (typeof response.valueCount !== "number" || Number.isNaN(response.valueCount)) {
