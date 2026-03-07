@@ -185,6 +185,13 @@ h3 {
   border-color: #e1e5e9;
 }
 
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
 input,
 select,
 textarea {
@@ -834,8 +841,8 @@ textarea {
 
 .preflight-shell {
   display: grid;
-  gap: 14px;
-  padding-bottom: calc(132px + env(safe-area-inset-bottom));
+  gap: 10px;
+  padding-bottom: calc(118px + env(safe-area-inset-bottom));
 }
 
 .preflight-header-card {
@@ -843,8 +850,9 @@ textarea {
   top: calc(74px + env(safe-area-inset-top));
   z-index: 8;
   display: grid;
-  gap: 12px;
-  background: rgba(255, 255, 255, 0.94);
+  gap: 6px;
+  padding: 10px 12px 8px;
+  background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(10px);
 }
 
@@ -856,53 +864,100 @@ textarea {
 
 .preflight-header-copy {
   display: grid;
-  gap: 8px;
+  gap: 4px;
   width: 100%;
 }
 
 .preflight-header-title-row {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 6px;
 }
 
 .preflight-title {
-  font-size: clamp(1.45rem, 4.2vw, 2rem);
-}
-
-.drawer-chip {
-  min-height: 38px;
-  border-radius: 999px;
-  border: 1px solid #ecd8be;
-  background: #fff8ee;
-  color: #83531b;
-  font-weight: 700;
-  padding: 8px 12px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.drawer-chip.active {
-  background: #fff2da;
-  box-shadow: inset 0 0 0 2px #c98b36;
-}
-
-.drawer-chip:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.preflight-context-grid.compact {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  font-size: clamp(1.26rem, 3.6vw, 1.8rem);
+  line-height: 1.02;
 }
 
 .team-rows.compact {
-  gap: 6px;
+  gap: 1px;
+  padding-top: 4px;
 }
 
 .team-rows.compact .team-row {
   padding: 0;
+  gap: 6px;
+}
+
+.team-rows.compact .team-side {
+  min-width: 32px;
+  font-size: 0.66rem;
+}
+
+.team-rows.compact .team-values {
+  font-size: 0.87rem;
+  line-height: 1.22;
+}
+
+.preflight-timing-line {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 3px 6px;
+  overflow-x: auto;
+  font-size: 0.86rem;
+  line-height: 1.15;
+  scrollbar-width: none;
+}
+
+.preflight-timing-label {
+  color: #88919d;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.preflight-timing-line::-webkit-scrollbar {
+  display: none;
+}
+
+.preflight-timing-value {
+  color: #202733;
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.preflight-timing-countdown {
+  color: #51606d;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.preflight-timing-divider {
+  color: #b2bbc5;
+}
+
+.preflight-header-card .progress-block {
+  gap: 3px;
+}
+
+.preflight-header-card .progress-track {
+  height: 5px;
+}
+
+.preflight-header-card .progress-meta.compact {
+  gap: 3px 8px;
+}
+
+.preflight-header-card .progress-meta.compact .label {
+  font-size: 0.82rem;
+}
+
+.preflight-header-card .progress-percent {
+  font-size: 0.94rem;
 }
 
 .swipe-card {
@@ -910,6 +965,7 @@ textarea {
   overflow: hidden;
   padding: 0;
   border-color: #d6dce3;
+  background: linear-gradient(180deg, #f7faf8 0%, #fbfaf7 100%);
   --pass-reveal: 0;
   --delay-reveal: 0;
 }
@@ -980,36 +1036,39 @@ textarea {
   z-index: 1;
   display: grid;
   gap: 14px;
-  padding: 16px;
-}
-
-.swipe-card-body {
-  display: grid;
-  gap: 14px;
-  background: var(--surface);
-  border-radius: 12px;
+  padding: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97) 0%, rgba(251, 252, 253, 0.94) 100%);
+  border: 1px solid #d6dce3;
+  border-radius: inherit;
   touch-action: pan-y;
   transition: transform 160ms ease, box-shadow 160ms ease;
   will-change: transform;
 }
 
-.swipe-card-body.dragging {
+.swipe-card-body {
+  display: grid;
+  gap: 14px;
+  background: transparent;
+  border-radius: inherit;
+}
+
+.swipe-card-panel.dragging {
   transition: none;
 }
 
-.swipe-card.preview-pass .swipe-card-body {
+.swipe-card.preview-pass .swipe-card-panel {
   box-shadow: 0 10px 20px rgba(24, 122, 64, 0.12);
 }
 
-.swipe-card.preview-delay .swipe-card-body {
+.swipe-card.preview-delay .swipe-card-panel {
   box-shadow: 0 10px 20px rgba(168, 106, 34, 0.14);
 }
 
 .step-card {
   display: grid;
   gap: 14px;
-  scroll-margin-top: 170px;
-  scroll-margin-bottom: 170px;
+  scroll-margin-top: 144px;
+  scroll-margin-bottom: 132px;
 }
 
 .step-title-row {
@@ -1029,12 +1088,12 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 12px;
+  padding: 10px;
   border-radius: 12px;
   border: 1px dashed #b7c7d8;
   background: #f5f9fd;
   color: #26425d;
-  font-size: 0.92rem;
+  font-size: 0.88rem;
 }
 
 .measurement-panel {
@@ -1110,8 +1169,8 @@ textarea {
   font-weight: 700;
   padding: 8px 12px;
   cursor: pointer;
-  scroll-margin-top: 170px;
-  scroll-margin-bottom: 170px;
+  scroll-margin-top: 144px;
+  scroll-margin-bottom: 132px;
 }
 
 .measure-chip.active {
@@ -1132,8 +1191,8 @@ textarea {
   font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
-  scroll-margin-top: 170px;
-  scroll-margin-bottom: 170px;
+  scroll-margin-top: 144px;
+  scroll-margin-bottom: 132px;
 }
 
 .camera-btn.active {
@@ -1173,8 +1232,8 @@ textarea {
   font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
-  scroll-margin-top: 170px;
-  scroll-margin-bottom: 170px;
+  scroll-margin-top: 144px;
+  scroll-margin-bottom: 132px;
 }
 
 .measure-action.primary {
@@ -1198,8 +1257,8 @@ textarea {
   font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
-  scroll-margin-top: 170px;
-  scroll-margin-bottom: 170px;
+  scroll-margin-top: 144px;
+  scroll-margin-bottom: 132px;
 }
 
 .decision-btn:disabled,
@@ -1230,10 +1289,15 @@ textarea {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-start;
 }
 
 .step-nav-inline > * {
-  flex: 1 1 180px;
+  flex: 0 0 auto;
+}
+
+.step-nav-button {
+  min-width: 0;
 }
 
 .delayed-drawer {
@@ -1307,7 +1371,8 @@ textarea {
   bottom: max(8px, env(safe-area-inset-bottom));
   z-index: 9;
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  padding: 12px;
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(10px);
   box-shadow: 0 16px 28px rgba(18, 24, 40, 0.1);
@@ -1317,17 +1382,17 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
 
 .ready-footer-copy {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
 .ready-footer-title {
-  font-size: 1rem;
+  font-size: 0.96rem;
   font-weight: 700;
   color: #162030;
 }
@@ -1341,7 +1406,7 @@ textarea {
 }
 
 .ready-footer-actions > * {
-  min-width: 168px;
+  min-width: 156px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1356,16 +1421,11 @@ textarea {
 
 @media (max-width: 700px) {
   .preflight-header-card {
-    top: calc(118px + env(safe-area-inset-top));
+    top: calc(88px + env(safe-area-inset-top));
   }
 
   .preflight-header-title-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .drawer-chip {
-    width: 100%;
+    align-items: baseline;
   }
 
   .camera-grid.large {
@@ -1383,25 +1443,86 @@ textarea {
 }
 
 @media (max-width: 640px) {
+  main {
+    padding: 12px 12px 28px;
+  }
+
+  .nav-inner {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .brand {
+    gap: 8px;
+  }
+
+  .brand-logo {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+  }
+
+  .brand-text {
+    font-size: 1.02rem;
+  }
+
+  .nav-links {
+    gap: 6px;
+  }
+
+  .nav-link {
+    padding: 7px 8px;
+    font-size: 0.82rem;
+  }
+
   .decision-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .preflight-context-grid.compact {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .preflight-header-card {
+    top: calc(102px + env(safe-area-inset-top));
+    gap: 5px;
+    padding: 9px 10px 8px;
   }
 
-  .step-nav-inline {
-    flex-direction: column;
+  .preflight-title {
+    font-size: clamp(1.2rem, 6.3vw, 1.58rem);
+  }
+
+  .preflight-timing-line {
+    gap: 3px 5px;
+    font-size: 0.8rem;
+  }
+
+  .team-rows.compact {
+    padding-top: 3px;
+  }
+
+  .team-rows.compact .team-values {
+    font-size: 0.82rem;
+  }
+
+  .step-card {
+    scroll-margin-top: 124px;
+    scroll-margin-bottom: 116px;
   }
 
   .step-nav-inline > * {
-    width: 100%;
+    width: auto;
   }
 
   .ready-footer-bar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .ready-footer {
+    padding: 10px;
+  }
+
+  .ready-footer-copy .step-kicker,
+  .ready-footer-copy > .label {
+    display: none;
   }
 
   .ready-footer-actions {

@@ -53,17 +53,13 @@ type StepCounts = {
 
 type PreflightHeaderProps = {
   matchContext: MatchCard | null;
-  matchKey: string;
   matchSubtitle: string;
   matchTitle: string;
   progressPercent: number;
-  run: PreflightRun;
   stepIndex: number;
   counts: StepCounts;
   delayedCount: number;
-  delayedOpen: boolean;
   fallbackLabel: string;
-  onToggleDelayed: () => void;
 };
 
 type MeasurementPanelProps = {
@@ -313,42 +309,6 @@ function statCounts(responses: StepResponse[]): StepCounts {
   return { passed, overridden, inProgress, blocked, unanswered };
 }
 
-function runStatusClass(run: PreflightRun, openActionCardCount: number): string {
-  if (run.state === "READY") {
-    return "field";
-  }
-  if (openActionCardCount > 0 || run.state === "BLOCKED") {
-    return "queue";
-  }
-  return "upcoming";
-}
-
-function runStatusLabel(run: PreflightRun, openActionCardCount: number): string {
-  if (run.state === "READY") {
-    return "READY";
-  }
-  if (openActionCardCount > 0) {
-    return openActionCardCount === 1 ? "1 DELAY OPEN" : `${openActionCardCount} DELAYS OPEN`;
-  }
-  return "IN CHECKLIST";
-}
-
-function matchStatusClass(status: MatchCard["status"]): string {
-  if (status === "QUEUE") {
-    return "queue";
-  }
-  if (status === "ON_DECK") {
-    return "deck";
-  }
-  if (status === "ON_FIELD_SOON") {
-    return "field";
-  }
-  if (status === "COMPLETED") {
-    return "done";
-  }
-  return "upcoming";
-}
-
 function opposingAllianceColor(color: MatchCard["allianceColor"]): "red" | "blue" | "unknown" {
   if (color === "red") {
     return "blue";
@@ -506,74 +466,48 @@ function canPassCurrentStep(step: ChecklistStep, response: StepResponse | undefi
 
 function PreflightHeader({
   matchContext,
-  matchKey,
   matchSubtitle,
   matchTitle,
   progressPercent,
-  run,
   stepIndex,
   counts,
   delayedCount,
-  delayedOpen,
-  fallbackLabel,
-  onToggleDelayed
+  fallbackLabel
 }: PreflightHeaderProps): React.JSX.Element {
   return (
     <section className="card preflight-header-card">
-      <div className="preflight-header-top">
-        <div className="preflight-header-copy">
-          <div className="ready-board-kicker">{matchSubtitle}</div>
-          <div className="preflight-header-title-row">
-            <h1 className="preflight-title">{matchTitle}</h1>
-            <button
-              className={`drawer-chip ${delayedOpen ? "active" : ""}`}
-              type="button"
-              onClick={onToggleDelayed}
-              disabled={delayedCount === 0}
-            >
-              Delayed ({delayedCount})
-            </button>
-          </div>
-          <div className="ready-board-inline">
-            {delayedCount === 0 ? (
-              <span className={`pill ${runStatusClass(run, delayedCount)}`}>{runStatusLabel(run, delayedCount)}</span>
-            ) : null}
-            {matchContext ? (
-              <span className={`pill ${matchStatusClass(matchContext.status)}`}>{matchContext.status.replaceAll("_", " ")}</span>
-            ) : null}
-            {!matchContext ? <span className="pill subtle-pill">{fallbackLabel}</span> : null}
-          </div>
+      <div className="preflight-header-copy">
+        <div className="preflight-header-title-row">
+          <h1 className="preflight-title">{matchTitle}</h1>
         </div>
-      </div>
 
-      {matchContext ? (
-        <>
-          <div className="preflight-context-grid compact">
-            <div className="preflight-context-block">
-              <div className="label">Queue</div>
-              <div className="value">{formatTime(matchContext.queueTimeIso)}</div>
+        {matchContext ? (
+          <>
+            <div className="preflight-timing-line">
+              <span className="preflight-timing-label">QUEUE</span>
+              <span className="preflight-timing-value">{formatTime(matchContext.queueTimeIso)}</span>
+              <span className="preflight-timing-label">MATCH</span>
+              <span className="preflight-timing-value">{formatTime(matchContext.expectedStartTimeIso)}</span>
+              <span className="preflight-timing-divider">|</span>
+              <span className="preflight-timing-countdown">{matchSubtitle}</span>
             </div>
-            <div className="preflight-context-block">
-              <div className="label">Field</div>
-              <div className="value">{formatTime(matchContext.expectedStartTimeIso)}</div>
+            <div className="team-rows compact">
+              <div className="team-row">
+                <span className="team-side">ALLY</span>
+                <span className={`team-values alliance ${matchContext.allianceColor}`}>{matchContext.allianceTeams.join(" • ")}</span>
+              </div>
+              <div className="team-row">
+                <span className="team-side">OPP</span>
+                <span className={`team-values alliance ${opposingAllianceColor(matchContext.allianceColor)}`}>
+                  {matchContext.opponentTeams.join(" • ")}
+                </span>
+              </div>
             </div>
-          </div>
-          <div className="team-rows compact">
-            <div className="team-row">
-              <span className="team-side">ALLY</span>
-              <span className={`team-values alliance ${matchContext.allianceColor}`}>{matchContext.allianceTeams.join(" • ")}</span>
-            </div>
-            <div className="team-row">
-              <span className="team-side">OPP</span>
-              <span className={`team-values alliance ${opposingAllianceColor(matchContext.allianceColor)}`}>
-                {matchContext.opponentTeams.join(" • ")}
-              </span>
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="label">{fallbackLabel || matchKey}</div>
-      )}
+          </>
+        ) : (
+          <div className="label">{fallbackLabel}</div>
+        )}
+      </div>
 
       <div className="progress-block">
         <div className="progress-meta compact">
@@ -885,15 +819,17 @@ function SwipeDecisionCard({
         </div>
       ) : null}
 
-      <div className="swipe-card-panel">
+      <div
+        ref={cardRef}
+        className={`swipe-card-panel ${dragging ? "dragging" : ""}`}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        onPointerCancel={handlePointerEnd}
+        style={canSwipe ? { transform: `translateX(${dragX}px)` } : undefined}
+      >
         <div
-          ref={cardRef}
-          className={`swipe-card-body ${dragging ? "dragging" : ""}`}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerEnd}
-          onPointerCancel={handlePointerEnd}
-          style={canSwipe ? { transform: `translateX(${dragX}px)` } : undefined}
+          className="swipe-card-body"
         >
           <div className="step-title-row">
             <div className="step-kicker">Step {stepIndex + 1} of {totalSteps}</div>
@@ -1458,17 +1394,13 @@ export default function PreflightPage(): React.JSX.Element {
     <div className="preflight-shell">
       <PreflightHeader
         matchContext={matchContext}
-        matchKey={matchKey}
         matchSubtitle={matchSubtitle}
         matchTitle={matchTitle}
         progressPercent={progressPercent}
-        run={run}
         stepIndex={stepIndex}
         counts={counts}
         delayedCount={openActionCards.length}
-        delayedOpen={delayedOpen}
         fallbackLabel={`${settings.eventKey} • ${matchKey}`}
-        onToggleDelayed={toggleDelayedDrawer}
       />
 
       <SwipeDecisionCard
@@ -1493,7 +1425,7 @@ export default function PreflightPage(): React.JSX.Element {
 
       <div className="step-nav-inline">
         <button
-          className="button secondary"
+          className="button secondary small step-nav-button"
           type="button"
           onClick={() => setStepIndex((prev) => Math.max(0, prev - 1))}
           disabled={stepIndex === 0 || isLocked}
@@ -1501,7 +1433,7 @@ export default function PreflightPage(): React.JSX.Element {
           Previous Step
         </button>
         {undoState ? (
-          <button className="button secondary" type="button" onClick={() => void undoLastAction()}>
+          <button className="button secondary small step-nav-button" type="button" onClick={() => void undoLastAction()}>
             Undo Last Action
           </button>
         ) : null}
